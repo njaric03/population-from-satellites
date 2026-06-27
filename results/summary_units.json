@@ -1,0 +1,13 @@
+{
+  "naselje_rows": 4721,
+  "naselje_uniq_opstina": 168,
+  "naselje_area_km2_total": 77368.7,
+  "naselje_area_km2_p50": 10.21,
+  "naselje_area_km2_max": 289.1,
+  "opstine_rows": 197,
+  "popisni_krug_rows": 41660,
+  "households_total": 0,
+  "households_skew_raw": 0.0,
+  "households_skew_log1p": 0.0,
+  "population_field_present": false
+}
