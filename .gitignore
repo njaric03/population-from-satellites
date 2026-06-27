@@ -1,0 +1,27 @@
+# Podaci (preveliki za git: gpkg, cutouts, kompoziti, footprinti)
+data/
+*.zip
+
+# Claude Code i lokalna podešavanja
+.claude/
+CLAUDE.md
+.mcp.json
+
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+venv/
+env/
+
+# Modeli i tezine
+*.pt
+*.pth
+*.safetensors
+
+# OS i editori
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
