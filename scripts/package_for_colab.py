@@ -1,11 +1,12 @@
-"""Spakuj cutoute + tabele u kaggle_upload.zip za upload na Kaggle (kao Dataset).
+"""Spakuj cutoute + tabele u data_upload.zip za upload na Colab.
 Struktura u zip-u: cutouts/<mb>.npy, index.csv, naselje_table.parquet, naselje_footprints.parquet
 Ponovo pokreni kad subset/full zavrsi da osvezi zip.
 """
 import os, glob, zipfile
-BASE = r"C:\Users\njari\Desktop\Faks\DU\projekat\data"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE = os.path.join(ROOT, "data")
 CUT = BASE + r"\cutouts"; DSD = BASE + r"\dataset"
-ZIP = r"C:\Users\njari\Desktop\Faks\DU\projekat\data_upload.zip"
+ZIP = os.path.join(ROOT, "data_upload.zip")
 
 npys = glob.glob(CUT + r"\*.npy")
 with zipfile.ZipFile(ZIP, "w", zipfile.ZIP_STORED) as z:   # npy je vec kompaktan, bez kompresije
