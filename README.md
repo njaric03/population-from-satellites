@@ -15,12 +15,14 @@ uz kasnije spajanje oba u zajednički model.
 ```
 notebooks/
   EDA.ipynb            analiza podataka: jedinice, populacija, footprinti, snimci
-  colab_train.ipynb    trening na Google Colab GPU (pristup 1)
+  colab_train.ipynb    trening pristup 1 (Sentinel CNN), Colab/Databricks + MLflow
+  footprint_train.ipynb  trening pristup 2 (CNN nad otiscima zgrada) + MLflow
 scripts/
   build_labels.py            spajanje RZS populacije sa geometrijom naselja
   make_dataset_table.py      master tabela naselja (centroid, labela, grupisanje)
   footprints_per_naselje.py  footprinti po naselju iz Overture baze
   cutout_sentinel_batch.py   Sentinel iseci preko openEO (batch po okrugu)
+  footprint_rasters.py        rasterizacija otisaka zgrada u kanale (pristup 2)
   rural_footprints.py         provera pokrivenosti footprintima u selima
   build_eda_notebook.py       generise notebooks/EDA.ipynb
   build_colab_notebook.py     generise notebooks/colab_train.ipynb

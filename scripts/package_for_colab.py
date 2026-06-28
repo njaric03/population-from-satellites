@@ -18,3 +18,14 @@ with zipfile.ZipFile(ZIP, "w", zipfile.ZIP_STORED) as z:   # npy je vec kompakta
     if os.path.exists(fp): z.write(fp, "naselje_footprints.parquet")
 mb = os.path.getsize(ZIP) / 1e6
 print(f"WROTE {ZIP} | cutouts: {len(npys)} | velicina: {mb:.1f} MB")
+
+# pristup 2: footprint rasteri (ako postoje)
+FCUT = BASE + r"\footprint_cutouts"
+if os.path.isdir(FCUT):
+    fnpys = glob.glob(FCUT + r"\*.npy")
+    FZIP = os.path.join(ROOT, "footprint_upload.zip")
+    with zipfile.ZipFile(FZIP, "w", zipfile.ZIP_STORED) as z:
+        for f in fnpys:
+            z.write(f, "footprint_cutouts/" + os.path.basename(f))
+        z.write(DSD + r"\naselje_table.parquet", "naselje_table.parquet")
+    print(f"WROTE {FZIP} | footprint cutouts: {len(fnpys)} | velicina: {os.path.getsize(FZIP)/1e6:.1f} MB")
