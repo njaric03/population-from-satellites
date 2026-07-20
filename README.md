@@ -14,10 +14,14 @@ uz kasnije spajanje oba u zajednički model.
 
 ```
 notebooks/
-  EDA.ipynb            analiza podataka: jedinice, populacija, footprinti, snimci
-  colab_train.ipynb    trening pristup 1 (Sentinel CNN), Colab/Databricks + MLflow
-  footprint_train.ipynb  trening pristup 2 (CNN nad otiscima zgrada) + MLflow
-  tiles_train.ipynb     trening: plocice + agregaciona loss (resava MAUP velikih naselja)
+  EDA.py               analiza podataka: jedinice, populacija, footprinti, snimci
+  sentinel_train_v1.py  trening pristup 1 (Sentinel CNN, ceo isecak po naselju) + MLflow
+  footprint_train.py    trening pristup 2 (CNN nad otiscima zgrada) + MLflow
+  tiles_train.py        trening: plocice + agregaciona loss (resava MAUP velikih naselja)
+src/procena/
+  data.py              dataset, normalizacija po opsegu, DataLoader-i
+  train.py             seeding, trening/eval prolaz, dvofazni trening (glava -> fine-tuning)
+  cv.py                GroupKFold foldovi, OOF metrike, CV rezime grafik
 scripts/
   build_labels.py            spajanje RZS populacije sa geometrijom naselja
   make_dataset_table.py      master tabela naselja (centroid, labela, grupisanje)
@@ -27,8 +31,6 @@ scripts/
   tile_cutouts.py             seckanje naselja na plocice iz kompozita (pristup B1)
   package_tiles.py            pakuje plocice u tiles_upload.zip
   rural_footprints.py         provera pokrivenosti footprintima u selima
-  build_eda_notebook.py       generise notebooks/EDA.ipynb
-  build_colab_notebook.py     generise notebooks/colab_train.ipynb
   package_for_colab.py        pakuje cutoute u data_upload.zip za Colab
 results/               mali artefakti: EDA grafici, sazeci, tabela labela
 data/                  nije u repozitorijumu (preveliko)
@@ -54,8 +56,9 @@ python scripts/cutout_sentinel_batch.py subset
 python scripts/package_for_colab.py
 ```
 
-Trening: otvori `notebooks/colab_train.ipynb` na Google Colab, ukljuci GPU,
-uploaduj `data_upload.zip` u `/content`, pa Run all.
+Trening: notebooki u `notebooks/` su u Databricks source formatu (.py) i pokrecu se
+na Databricks radnom prostoru (UC Volume sa podacima) ili na Colabu uz upload
+odgovarajuceg zip-a (`data_upload.zip` / `footprint_upload.zip` / `tiles_upload.zip`).
 
 ## Podaci
 
