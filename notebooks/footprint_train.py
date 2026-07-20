@@ -27,10 +27,14 @@
 # COMMAND ----------
 
 # DBTITLE 1,Postavke hiperparametara
-import sys
-sys.path.insert(0, "/Workspace/Users/korisnik/du-procena-stanovnistva/src")
+import sys, os
+# src modul: Databricks Workspace ili klon repozitorijuma na Colabu (/content)
+for _src in ("/Workspace/Users/korisnik/du-procena-stanovnistva/src",
+             "/content/du-procena-stanovnistva/src"):
+    if os.path.isdir(_src):
+        sys.path.insert(0, _src); break
 
-import os, glob, zipfile
+import glob, zipfile
 import numpy as np, pandas as pd
 import torch, torch.nn as nn
 import timm, mlflow
@@ -40,6 +44,7 @@ from procena import (
     seed_everything, prodji, dvofazni_trening,
     stats_po_opsegu, Naselja, napravi_loadere, NW,
     napravi_foldove, oof_metrics, cv_summary_figure,
+    podesi_mlflow, izlazni_dir, sacuvaj_oof,
 )
 
 # Colab: "/content/fp_data" (raspakuje footprint_upload.zip). Databricks: UC Volume (isti "data" folder kao ostali pristupi).
@@ -47,6 +52,7 @@ DATA_DIR = "/content/fp_data" if os.path.isdir("/content") else "/Volumes/katalo
 if os.path.isdir("/content") and not os.path.isdir(DATA_DIR + "/footprint_cutouts"):
     zipfile.ZipFile("/content/footprint_upload.zip").extractall(DATA_DIR)
 CUT = DATA_DIR + "/footprint_cutouts"
+OUT_DIR = izlazni_dir()   # tezine modela i OOF parquet (UC Volume ili /content/out)
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 # svi hiperparametri na jednom mestu (jedini izvor istine)
@@ -140,7 +146,7 @@ def treniraj_fold(train_frame, val_frame):
 # DBTITLE 1,Pokreni CV
 def run():
     """Puna k-struka GroupKFold CV (footprint pristup)."""
-    mlflow.set_experiment("/Users/korisnik/procena_stanovnika")
+    podesi_mlflow()   # Databricks workspace, ili Colab -> Databricks preko env varijabli, ili lokalni mlruns
     oof = pd.Series(np.nan, index=df.naselje_maticni_broj.values, dtype="float32")
     fold_r2 = []
 
@@ -169,7 +175,7 @@ def run():
                 best_state, best_r2, oof_pred_pop, net = treniraj_fold(train_frame, val_frame)
                 mlflow.log_metric("best_val_r2", best_r2)
                 oof.loc[val_frame.naselje_maticni_broj.values] = oof_pred_pop
-                put = f"/Volumes/katalog/deep_learning/raw_data/footprint_fold{fold}.pt"
+                put = f"{OUT_DIR}/footprint_fold{fold}.pt"
                 torch.save(best_state, put); mlflow.log_artifact(put)
                 mlflow.pytorch.log_model(
                     net,
@@ -187,6 +193,8 @@ def run():
             **oof_metrics(stvarno, oof_pred, df),
         }
         mlflow.log_metrics(agg)
+        put_oof = sacuvaj_oof(df, oof_pred, "footprint", OUT_DIR)   # ulaz za fuziju
+        mlflow.log_artifact(put_oof)
         fig = cv_summary_figure(fold_r2, agg, stvarno, oof_pred, df, label="footprint")
         plt.show()
         mlflow.log_figure(fig, "cv_evaluacija_footprint.png")

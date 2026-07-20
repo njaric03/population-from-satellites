@@ -16,10 +16,14 @@
 # COMMAND ----------
 
 # DBTITLE 1,Postavke hiperparametara
-import sys
-sys.path.insert(0, "/Workspace/Users/korisnik/du-procena-stanovnistva/src")
+import sys, os
+# src modul: Databricks Workspace ili klon repozitorijuma na Colabu (/content)
+for _src in ("/Workspace/Users/korisnik/du-procena-stanovnistva/src",
+             "/content/du-procena-stanovnistva/src"):
+    if os.path.isdir(_src):
+        sys.path.insert(0, _src); break
 
-import os, glob, zipfile
+import glob, zipfile
 import numpy as np, pandas as pd
 import torch, torch.nn as nn
 try:
@@ -34,11 +38,15 @@ from procena import (
     stats_po_opsegu, Naselja, NW, seed_worker,
     napravi_loadere as _base_napravi_loadere,   # alias – ovaj notebook ima sopstveni wrapper
     napravi_foldove, oof_metrics, cv_summary_figure,
+    podesi_mlflow, izlazni_dir, sacuvaj_oof,
 )
 
-# podaci su vec raspakovani u Volume 
-BASE = "/Volumes/katalog/deep_learning/raw_data/data"
+# Colab: "/content/data" (raspakuje data_upload.zip). Databricks: UC Volume (podaci vec raspakovani).
+BASE = "/content/data" if os.path.isdir("/content") else "/Volumes/katalog/deep_learning/raw_data/data"
+if os.path.isdir("/content") and not os.path.isdir(BASE + "/cutouts"):
+    zipfile.ZipFile("/content/data_upload.zip").extractall(BASE)
 CUT = BASE + "/cutouts"
+OUT_DIR = izlazni_dir()   # tezine modela i OOF parquet (UC Volume ili /content/out)
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 # svi hiperparametri na jednom mestu (jedini izvor istine)
 CFG = {
@@ -78,7 +86,7 @@ N_FOLDS = len(FOLDS)
 broj_opstina = df["opstina_maticni_broj"].nunique()
 print(f"uzoraka {len(df)} | opstina {broj_opstina} | foldova {N_FOLDS}")
 for i, (t, v) in enumerate(FOLDS):
-    print(f"  fold {i}: trening {len(t)} / val {len(v)} naselja ({v["opstina_maticni_broj"].nunique()} opstina)")
+    print(f"  fold {i}: trening {len(t)} / val {len(v)} naselja ({v['opstina_maticni_broj'].nunique()} opstina)")
 
 # COMMAND ----------
 
@@ -177,7 +185,7 @@ def run_target(target):
     Roditeljski MLflow run + ugnjezdeni run po foldu. OOF predikcije (svako naselje u validaciji
     tacno jednom) se skupljaju i daju jedinstvenu procenu na celom skupu."""
     spec = TARGET_SPECS[target]
-    mlflow.set_experiment("/Users/korisnik/procena_stanovnika")
+    podesi_mlflow()   # Databricks workspace, ili Colab -> Databricks preko env varijabli, ili lokalni mlruns
     oof = pd.Series(np.nan, index=df.naselje_maticni_broj.values, dtype="float32")  # OOF po naselju
     fold_r2 = []
 
@@ -198,7 +206,7 @@ def run_target(target):
                 best_state, best_r2, oof_pred_pop, net = treniraj_fold(target, train_frame, val_frame)
                 mlflow.log_metric("best_val_r2", best_r2)
                 oof.loc[val_frame.naselje_maticni_broj.values] = oof_pred_pop   # upisi OOF za ovaj fold
-                put = f"/Volumes/katalog/deep_learning/raw_data/resnet18_{target}_fold{fold}.pt"
+                put = f"{OUT_DIR}/resnet18_{target}_fold{fold}.pt"
                 torch.save(best_state, put); mlflow.log_artifact(put)
                 mlflow.pytorch.log_model(net, name=f"model_{target}_fold{fold}")   # servabilan model artefakt
                 fold_r2.append(best_r2)
@@ -213,6 +221,8 @@ def run_target(target):
             **oof_metrics(stvarno, oof_pred, df),
         }
         mlflow.log_metrics(agg)
+        put_oof = sacuvaj_oof(df, oof_pred, f"sentinel_{target}", OUT_DIR)   # ulaz za fuziju
+        mlflow.log_artifact(put_oof)
         fig = cv_summary_figure(fold_r2, agg, stvarno, oof_pred, df, label=target)
         plt.show()
         mlflow.log_figure(fig, f"cv_evaluacija_{target}.png")

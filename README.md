@@ -60,6 +60,12 @@ Trening: notebooki u `notebooks/` su u Databricks source formatu (.py) i pokrecu
 na Databricks radnom prostoru (UC Volume sa podacima) ili na Colabu uz upload
 odgovarajuceg zip-a (`data_upload.zip` / `footprint_upload.zip` / `tiles_upload.zip`).
 
+Colab: kloniraj repo u `/content` (zbog `src/procena`), uploaduj zip u `/content`,
+pa pokreni celije notebooka redom. MLflow: ako su postavljeni `DATABRICKS_HOST` i
+`DATABRICKS_TOKEN` (env varijable), metrike idu u zajednicki Databricks eksperiment;
+bez njih se koristi lokalni `mlruns/`. Tezine modela i OOF predikcije
+(`oof_<pristup>.parquet`, ulaz za fuziju) idu u `/content/out`, na Databricksu na UC Volume.
+
 ## Podaci
 
 Folder `data/` (geometrije, iseci, kompoziti, ~GB) se ne cuva u git-u. Izvedeni mali

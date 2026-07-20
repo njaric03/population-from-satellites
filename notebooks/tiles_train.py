@@ -28,10 +28,14 @@
 # COMMAND ----------
 
 # DBTITLE 1,Postavke hiperparametara
-import sys
-sys.path.insert(0, "/Workspace/Users/korisnik/du-procena-stanovnistva/src")
+import sys, os
+# src modul: Databricks Workspace ili klon repozitorijuma na Colabu (/content)
+for _src in ("/Workspace/Users/korisnik/du-procena-stanovnistva/src",
+             "/content/du-procena-stanovnistva/src"):
+    if os.path.isdir(_src):
+        sys.path.insert(0, _src); break
 
-import os, glob, zipfile
+import glob, zipfile
 import numpy as np, pandas as pd
 import torch, torch.nn as nn, torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
@@ -42,6 +46,7 @@ from procena import (
     seed_everything, seed_worker, dvofazni_trening,
     stats_po_opsegu, NW,
     napravi_foldove, oof_metrics, cv_summary_figure,
+    podesi_mlflow, izlazni_dir, sacuvaj_oof,
 )
 
 # Colab: "/content/tiles_data" (raspakuje tiles_upload.zip). Databricks: UC Volume (isti "data" folder kao ostali pristupi).
@@ -49,6 +54,7 @@ DATA_DIR = "/content/tiles_data" if os.path.isdir("/content") else "/Volumes/kat
 if os.path.isdir("/content") and not os.path.isdir(DATA_DIR + "/tiles"):
     zipfile.ZipFile("/content/tiles_upload.zip").extractall(DATA_DIR)
 TILES = DATA_DIR + "/tiles"
+OUT_DIR = izlazni_dir()   # tezine modela i OOF parquet (UC Volume ili /content/out)
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 # svi hiperparametri na jednom mestu (jedini izvor istine)
@@ -240,7 +246,7 @@ def run(loss_space="log"):
     loss_space: "log" (Huber na log1p) ili "linear" (Huber u prostoru stanovnika) — za poredjenje."""
     global LOSS_SPACE
     LOSS_SPACE = loss_space
-    mlflow.set_experiment("/Users/korisnik/procena_stanovnika")
+    podesi_mlflow()   # Databricks workspace, ili Colab -> Databricks preko env varijabli, ili lokalni mlruns
     oof = pd.Series(np.nan, index=nasel.naselje_maticni_broj.values, dtype="float32")
     fold_r2 = []
     loss_opis = "HuberLoss(log1p suma plocica)" if loss_space == "log" else "HuberLoss(suma plocica / POP_SCALE)"
@@ -262,7 +268,7 @@ def run(loss_space="log"):
                 best_state, best_r2, oof_pred_pop, net = treniraj_fold(train_nasel_frame, val_nasel_frame)
                 mlflow.log_metric("best_val_r2", best_r2)
                 oof.loc[val_nasel_frame.naselje_maticni_broj.values] = oof_pred_pop
-                put = f"/Volumes/katalog/deep_learning/raw_data/tiles_agregacija_{loss_space}_fold{fold}.pt"
+                put = f"{OUT_DIR}/tiles_agregacija_{loss_space}_fold{fold}.pt"
                 torch.save(best_state, put); mlflow.log_artifact(put)
                 mlflow.pytorch.log_model(net, name=f"model_tiles_{loss_space}_fold{fold}")   # servabilan model artefakt
                 fold_r2.append(best_r2)
@@ -277,6 +283,8 @@ def run(loss_space="log"):
             **oof_metrics(stvarno, oof_pred, nasel),
         }
         mlflow.log_metrics(agg)
+        put_oof = sacuvaj_oof(nasel, oof_pred, f"tiles_{loss_space}", OUT_DIR)   # ulaz za fuziju
+        mlflow.log_artifact(put_oof)
         fig = cv_summary_figure(fold_r2, agg, stvarno, oof_pred, nasel, label=f"tiles-{loss_space}")
         plt.show()
         mlflow.log_figure(fig, f"cv_evaluacija_tiles_{loss_space}.png")
@@ -330,27 +338,4 @@ poredjenje = (
 )
 print("\n=== Poredjenje log vs linear (agregaciona loss) ===")
 display(poredjenje)
-
-# COMMAND ----------
-
-# === Poredjenje: linearni Huber (loss u stanovnicima) vs log-Huber baseline ===
-# Isti hiperparametri i GroupKFold; jedina razlika je prostor u kome se racuna loss.
-# Cilj: da li trening u linearnom prostoru popravlja agregaciju po opstini (linearni R2).
-mlflow.pytorch.log_model = _log_model_pickle
-try:
-    rezultat_lin = run(loss_space="linear")
-finally:
-    mlflow.pytorch.log_model = _orig_log_model
-
-poredjenje = (
-    pd.DataFrame([rezultat, rezultat_lin])
-    .set_index("pristup")[
-        ["cv_mean_val_r2", "oof_r2_log", "oof_opstina_r2", "oof_opstina_r2_log",
-         "oof_mae_stanovnici", "oof_rmse_stanovnici"]
-    ]
-)
-print("\n=== Poredjenje log vs linear (agregaciona loss) ===")
-display(poredjenje)
-
-# COMMAND ----------
 

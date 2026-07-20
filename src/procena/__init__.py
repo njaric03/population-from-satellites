@@ -12,9 +12,10 @@ Upotreba u notebucima::
         napravi_foldove, oof_metrics, cv_summary_figure,
     )
 """
-from .data  import NW, Naselja, napravi_loadere, seed_worker, stats_po_opsegu
-from .train import dvofazni_trening, prodji, seed_everything
-from .cv    import cv_summary_figure, napravi_foldove, oof_metrics
+from .data      import NW, Naselja, napravi_loadere, seed_worker, stats_po_opsegu
+from .train     import dvofazni_trening, prodji, seed_everything
+from .cv        import cv_summary_figure, napravi_foldove, oof_metrics
+from .okruzenje import NA_DATABRICKSU, izlazni_dir, podesi_mlflow, sacuvaj_oof
 
 __all__ = [
     # data
@@ -31,4 +32,9 @@ __all__ = [
     "cv_summary_figure",
     "napravi_foldove",
     "oof_metrics",
+    # okruzenje
+    "NA_DATABRICKSU",
+    "izlazni_dir",
+    "podesi_mlflow",
+    "sacuvaj_oof",
 ]
