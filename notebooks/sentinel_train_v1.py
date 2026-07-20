@@ -228,7 +228,9 @@ def run_target(target):
         mlflow.log_figure(fig, f"cv_evaluacija_{target}.png")
 
     print(f"[{target}] CV R2 {agg['cv_mean_val_r2']:.3f} ± {agg['cv_std_val_r2']:.3f}"
-          f" | OOF opstina R2 {agg['oof_opstina_r2']:.3f} | OOF MAE(st) {agg['oof_mae_stanovnici']:.0f}")
+          f" | OOF R2(log) {agg['oof_r2_log']:.3f} | medAPE {agg.get('oof_medape', float('nan')):.2f}"
+          f" | wMAPE {agg.get('oof_wmape', float('nan')):.2f} | bias {agg.get('oof_bias', float('nan')):.2f}"
+          f" | opstina R2(log, bez top2) {agg.get('oof_opstina_r2_log_bez_top2', float('nan')):.3f}")
     return {"target": target, **agg}
 
 # COMMAND ----------
@@ -242,6 +244,8 @@ def run_target(target):
 # puna 5-struka GroupKFold CV za svaku ciljnu velicinu iz CFG["targets"] (svaka = roditeljski MLflow run + ugnjezdeni run po foldu) i poredi rezultate
 rezultati = [run_target(t) for t in CFG["targets"]]
 
-poredjenje = pd.DataFrame(rezultati).set_index("target")
+kolone = ["cv_mean_val_r2", "oof_r2_log", "oof_medape", "oof_wmape", "oof_bias",
+          "oof_kalib_nagib", "oof_opstina_r2_log", "oof_opstina_r2_log_bez_top2"]
+poredjenje = pd.DataFrame(rezultati).set_index("target").reindex(columns=kolone)
 print("\n=== Poredjenje ciljnih velicina (validacija) ===")
 display(poredjenje)

@@ -200,7 +200,9 @@ def run():
         mlflow.log_figure(fig, "cv_evaluacija_footprint.png")
 
     print(f"[footprint] CV R2 {agg['cv_mean_val_r2']:.3f} \u00b1 {agg['cv_std_val_r2']:.3f}"
-          f" | OOF opstina R2 {agg['oof_opstina_r2']:.3f} | OOF MAE(st) {agg['oof_mae_stanovnici']:.0f}")
+          f" | OOF R2(log) {agg['oof_r2_log']:.3f} | medAPE {agg.get('oof_medape', float('nan')):.2f}"
+          f" | wMAPE {agg.get('oof_wmape', float('nan')):.2f} | bias {agg.get('oof_bias', float('nan')):.2f}"
+          f" | opstina R2(log, bez top2) {agg.get('oof_opstina_r2_log_bez_top2', float('nan')):.3f}")
     return {"pristup": "footprint", **agg}
 
 
