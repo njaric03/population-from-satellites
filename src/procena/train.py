@@ -112,11 +112,13 @@ def dvofazni_trening(
     epochs_finetune: int,
     head_lr: float,
     finetune_lr: float,
+    head_prefix: str = "fc",
 ) -> tuple[float, dict]:
-    """Dvofazni trening koji je identican u svim trima notebucima.
+    """Dvofazni trening koji je identican u svim notebucima.
 
     * **Faza 1** – zamrznut backbone (BN u eval), uci se samo glava
-      (``fc.*`` parametri) ``epochs_head`` epoha sa AdamW i ``head_lr``.
+      (parametri ciji naziv pocinje sa ``head_prefix``) ``epochs_head``
+      epoha sa AdamW i ``head_lr``.
     * **Faza 2** – odmrznut ceo model, fine-tuning sa CosineAnnealingLR
       i ``finetune_lr``. Cuva se best checkpoint po val R2.
 
@@ -131,6 +133,9 @@ def dvofazni_trening(
         epochs_finetune: broj epoha faze 2.
         head_lr:         learning rate za fazu 1.
         finetune_lr:     learning rate za fazu 2.
+        head_prefix:     prefiks naziva parametara glave; ``"fc"`` za timm
+                         resnet18 sa num_classes=1 (podrazumevano),
+                         ``"head"`` za multimodalni model sa sopstvenom glavom.
 
     Returns:
         ``(best_val_r2, best_state_dict)`` – best_state_dict je recnik tezina
@@ -140,7 +145,7 @@ def dvofazni_trening(
 
     # Faza 1: samo glava, backbone zamrznut
     for naziv, p in net.named_parameters():
-        p.requires_grad = naziv.startswith("fc")
+        p.requires_grad = naziv.startswith(head_prefix)
     opt1 = torch.optim.AdamW(
         [p for p in net.parameters() if p.requires_grad], lr=head_lr
     )

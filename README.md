@@ -1,39 +1,56 @@
 # Procena broja stanovnika iz satelitskih snimaka
 
-Projekat iz Dubokog učenja. Konvoluciona neuronska mreža (ResNet-18, transfer learning)
-procenjuje broj stanovnika naselja na osnovu Sentinel-2 snimaka. Obuhvat je Srbija bez
-Kosova i Metohije.
+Projekat iz Dubokog učenja (DMI, UNSPMF). Duboki modeli procenjuju broj stanovnika
+naselja u Srbiji (bez Kosova i Metohije) iz javno dostupnih podataka daljinskog
+osmatranja; procene se porede sa zvaničnim popisom 2022. Tim: Nikola Jarić i
+Aleksandar Zdravković.
 
-Tim: Nikola Jarić i Aleksandar Zdravković. Dva komplementarna pristupa:
-1. CNN nad satelitskim snimkom (Sentinel-2, 6 opsega),
-2. CNN nad rasterizovanim otiscima zgrada (building footprints),
+## Pristupi
 
-uz kasnije spajanje oba u zajednički model.
+Dva komplementarna osnovna pristupa i dva načina fuzije:
+
+| # | Notebook | Ulaz | Ideja |
+|---|---|---|---|
+| 1 | `sentinel_train_v1.ipynb` | Sentinel-2, 6 opsega, 1 isečak po naselju | ResNet-18 regresija na `log1p(pop)` ili `log1p(gustina)` |
+| 1b | `tiles_train.ipynb` | Sentinel-2 pločice 2.24 km | broj stanovnika po pločici (softplus), suma pločica = naselje, loss na sumi — rešava problem velikih naselja (MAUP) |
+| 2 | `footprint_train.ipynb` | rasterizovani otisci zgrada (2 kanala: pokrivenost, zapreminska gustina) | ResNet-18 regresija na `log1p(pop)` |
+| F1 | `fusion_train.ipynb` | OOF predikcije pristupa 1/1b/2 | stacking (Ridge u log prostoru) + post-hoc kalibracija po pristupu; bez GPU-a |
+| F2 | `multimodal_train.ipynb` | Sentinel isečak + footprint raster istog naselja | zajednički model: dva ResNet-18 trupa, konkatenacija embeddinga, jedna regresiona glava, end-to-end |
+
+Svi pristupi dele isti evaluacioni protokol (`src/procena`): 5-struka GroupKFold
+podela po opštinama (bez prostornog curenja između trening i validacionog skupa),
+out-of-fold (OOF) predikcija za svako naselje tačno jednom, isti skup metrika i
+rezime grafik — rezultati su direktno uporedivi između pristupa.
+
+## Metrike
+
+Raspodela populacije je ekstremno iskošena (medijana naselja ~265, Beograd ~1.4M),
+pa prosečne apsolutne greške i linearni R² na sumama dominiraju najveći gradovi.
+Glavne metrike su zato: `oof_r2_log` (R² u log1p prostoru), `oof_medape`
+(medijalna procentualna greška), `oof_wmape` (relativna greška ponderisana
+populacijom), `oof_bias` (Σpred/Σstvarno) i `oof_kalib_nagib` (nagib log-log
+regresije; > 1 = kompresija predikcija ka sredini). Dodatno: greške po
+veličinskim stratumima naselja i opštinska agregacija sa i bez dve najveće
+opštine. Detalji u docstringu `procena.cv.oof_metrics`.
 
 ## Struktura
 
 ```
-notebooks/
-  EDA.py               analiza podataka: jedinice, populacija, footprinti, snimci
-  sentinel_train_v1.py  trening pristup 1 (Sentinel CNN, ceo isecak po naselju) + MLflow
-  footprint_train.py    trening pristup 2 (CNN nad otiscima zgrada) + MLflow
-  tiles_train.py        trening: plocice + agregaciona loss (resava MAUP velikih naselja)
-src/procena/
-  data.py              dataset, normalizacija po opsegu, DataLoader-i
+src/procena/           zajednicki modul (uvoze ga svi notebooki)
+  data.py              normalizacija po opsegu, Dataset, DataLoader-i
   train.py             seeding, trening/eval prolaz, dvofazni trening (glava -> fine-tuning)
   cv.py                GroupKFold foldovi, OOF metrike, CV rezime grafik
-scripts/
-  build_labels.py            spajanje RZS populacije sa geometrijom naselja
-  make_dataset_table.py      master tabela naselja (centroid, labela, grupisanje)
-  footprints_per_naselje.py  footprinti po naselju iz Overture baze
-  cutout_sentinel_batch.py   Sentinel iseci preko openEO (batch po okrugu)
-  footprint_rasters.py        rasterizacija otisaka zgrada u kanale (pristup 2)
-  tile_cutouts.py             seckanje naselja na plocice iz kompozita (pristup B1)
-  package_tiles.py            pakuje plocice u tiles_upload.zip
-  rural_footprints.py         provera pokrivenosti footprintima u selima
-  package_for_colab.py        pakuje cutoute u data_upload.zip za Colab
+  okruzenje.py         detekcija Databricks/Colab, MLflow tracking, izlazni dir, cuvanje OOF-a
+notebooks/             Databricks source format (.py)
+  EDA.ipynb            analiza podataka: jedinice, populacija, footprinti, snimci
+  sentinel_train_v1    pristup 1 (Sentinel CNN, pop i density cilj)
+  tiles_train          pristup 1b (plocice + agregaciona loss, log vs linear)
+  footprint_train      pristup 2 (CNN nad otiscima zgrada)
+  fusion_train         fuzija F1 (stacking + kalibracija nad OOF predikcijama)
+  multimodal_train     fuzija F2 (zajednicki dvogranski model)
+scripts/               priprema podataka (pokrece se lokalno, redom — videti dole)
 results/               mali artefakti: EDA grafici, sazeci, tabela labela
-data/                  nije u repozitorijumu (preveliko)
+data/                  nije u repozitorijumu (preveliko; deli se kao zip preko Drive-a)
 ```
 
 ## Izvori podataka
@@ -42,31 +59,38 @@ data/                  nije u repozitorijumu (preveliko)
 |---|---|
 | Snimci (ulaz) | Sentinel-2 L2A, Copernicus Data Space / openEO (https://dataspace.copernicus.eu) |
 | Geometrija naselja | Registar prostornih jedinica, GeoSrbija (https://download.geosrbija.rs) |
-| Broj stanovnika | Popis 2022, RZS (https://popis2022.stat.gov.rs/sr-latn/popisni-podaci-eksel-tabele/) |
-| Footprinti | Overture Maps (https://docs.overturemaps.org/guides/buildings/) |
+| Broj stanovnika (labela) | Popis 2022, RZS (https://popis2022.stat.gov.rs/sr-latn/popisni-podaci-eksel-tabele/) |
+| Otisci zgrada | Overture Maps (https://docs.overturemaps.org/guides/buildings/) |
 
-## Pokretanje
+Polazna referenca: Yeh et al., *Using publicly available satellite imagery and deep
+learning to understand economic well-being in Africa*, Nature Communications (2020).
 
-Priprema podataka (lokalno, redom):
+## Priprema podataka (lokalno, redom)
+
 ```
-python scripts/build_labels.py
-python scripts/make_dataset_table.py
-python scripts/footprints_per_naselje.py
-python scripts/cutout_sentinel_batch.py subset
-python scripts/package_for_colab.py
+python scripts/build_labels.py            # RZS popis + geometrija naselja
+python scripts/make_dataset_table.py      # master tabela naselja
+python scripts/footprints_per_naselje.py  # otisci zgrada po naselju (Overture)
+python scripts/cutout_sentinel_batch.py subset   # Sentinel iseci preko openEO
+python scripts/footprint_rasters.py       # rasterizacija otisaka (pristup 2)
+python scripts/tile_cutouts.py            # plocice (pristup 1b)
+python scripts/package_for_colab.py       # data_upload.zip + footprint_upload.zip
+python scripts/package_tiles.py           # tiles_upload.zip
 ```
 
-Trening: notebooki u `notebooks/` su u Databricks source formatu (.py) i pokrecu se
-na Databricks radnom prostoru (UC Volume sa podacima) ili na Colabu uz upload
-odgovarajuceg zip-a (`data_upload.zip` / `footprint_upload.zip` / `tiles_upload.zip`).
+## Trening
 
-Colab: kloniraj repo u `/content` (zbog `src/procena`), uploaduj zip u `/content`,
-pa pokreni celije notebooka redom. MLflow: ako su postavljeni `DATABRICKS_HOST` i
-`DATABRICKS_TOKEN` (env varijable), metrike idu u zajednicki Databricks eksperiment;
-bez njih se koristi lokalni `mlruns/`. Tezine modela i OOF predikcije
-(`oof_<pristup>.parquet`, ulaz za fuziju) idu u `/content/out`, na Databricksu na UC Volume.
+**Databricks** (primarno): repo je povezan kao Databricks Repo; podaci su
+raspakovani na UC Volume (`.../raw_data/data`). Otvoriti notebook i `Run all` —
+putanje, MLflow tracking i izlazi se podese sami. Redosled za fuziju: prvo
+trenirački notebooki (1/1b/2 — svaki snimi `oof_<pristup>.parquet`), pa
+`fusion_train`; `multimodal_train` je nezavisan (trenira iz sirovih ulaza).
 
-## Podaci
+**Colab** (rezerva): kloniraj repo u `/content` (zbog `src/procena`), uploaduj
+odgovarajući zip u `/content`, pa pokreni ćelije redom. MLflow: ako su postavljeni
+`DATABRICKS_HOST` i `DATABRICKS_TOKEN` (env varijable / Colab Secrets), metrike
+idu u zajednički Databricks eksperiment; bez njih u lokalni `mlruns/`. Težine
+modela i OOF predikcije idu u `/content/out`.
 
-Folder `data/` (geometrije, iseci, kompoziti, ~GB) se ne cuva u git-u. Izvedeni mali
-artefakti su u `results/`. Za rad u paru, `data_upload.zip` se deli preko Google Drive-a.
+Svaki run se prati kroz MLflow: hiperparametri, metrike po epohi, OOF metrike,
+rezime grafik, težine po foldu i OOF parquet kao artefakti.
