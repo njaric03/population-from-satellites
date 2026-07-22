@@ -165,6 +165,8 @@ def napravi_loadere_mm(train_frame, val_frame):
     _sw = (lambda wid: seed_worker(wid, CFG["seed"])) if NW else None
     tdl = DataLoader(NaseljaMM(train_frame, mean_s, std_s, mean_f, std_f, augment=True),
                      batch_size=CFG["batch_size"], shuffle=True,
+                     # batch od tacno 1 uzorka rusi BatchNorm u trening modu
+                     drop_last=len(train_frame) % CFG["batch_size"] == 1,
                      generator=gen, worker_init_fn=_sw,
                      num_workers=NW, pin_memory=True, persistent_workers=NW > 0,
                      prefetch_factor=4 if NW else None)

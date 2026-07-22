@@ -2,7 +2,8 @@
 # MAGIC %md
 # MAGIC # Fuzija pristupa (stacking nad OOF predikcijama)
 # MAGIC
-# MAGIC Treci deo projekta: spajanje satelitskog (tiles / sentinel) i footprint pristupa.
+# MAGIC Treci deo projekta: spajanje satelitskog (tiles / sentinel), footprint i
+# MAGIC multimodalnog pristupa.
 # MAGIC Meta-model (Ridge regresija u log prostoru) uci kako da kombinuje OOF predikcije
 # MAGIC osnovnih modela. Posteno je jer je svaka OOF predikcija napravljena modelom koji
 # MAGIC celu opstinu tog naselja nije video u treningu, a meta-model se ocenjuje istom
@@ -65,7 +66,8 @@ CFG = {
 seed_everything(CFG["seed"])
 
 # kandidati za ulaz u fuziju: koristi se svaki za koji postoji OOF parquet
-KANDIDATI = ["tiles_log", "tiles_linear", "footprint", "sentinel_pop", "sentinel_density"]
+KANDIDATI = ["tiles_log", "tiles_linear", "footprint", "sentinel_pop", "sentinel_density",
+             "multimodal"]
 
 # COMMAND ----------
 
@@ -132,7 +134,9 @@ def stacking_cv(x_kolone):
         koef.append(np.r_[reg.coef_, reg.intercept_])
     oof_pred = oof.loc[df.naselje_maticni_broj.values].values
     koef = np.mean(koef, axis=0)
-    return oof_pred, fold_r2, dict(zip([*x_kolone, "presek"], koef.round(3)))
+    # float(): np.float32 nije JSON-serijabilan pa bi mlflow.log_dict pukao
+    return oof_pred, fold_r2, {k: round(float(v), 3)
+                               for k, v in zip([*x_kolone, "presek"], koef)}
 
 # COMMAND ----------
 

@@ -14,7 +14,7 @@ Dva komplementarna osnovna pristupa i dva načina fuzije:
 | 1 | `sentinel_train_v1.ipynb` | Sentinel-2, 6 opsega, 1 isečak po naselju | ResNet-18 regresija na `log1p(pop)` ili `log1p(gustina)` |
 | 1b | `tiles_train.ipynb` | Sentinel-2 pločice 2.24 km | broj stanovnika po pločici (softplus), suma pločica = naselje, loss na sumi — rešava problem velikih naselja (MAUP) |
 | 2 | `footprint_train.ipynb` | rasterizovani otisci zgrada (2 kanala: pokrivenost, zapreminska gustina) | ResNet-18 regresija na `log1p(pop)` |
-| F1 | `fusion_train.ipynb` | OOF predikcije pristupa 1/1b/2 | stacking (Ridge u log prostoru) + post-hoc kalibracija po pristupu; bez GPU-a |
+| F1 | `fusion_train.ipynb` | OOF predikcije pristupa 1/1b/2 i F2 | stacking (Ridge u log prostoru) + post-hoc kalibracija po pristupu; bez GPU-a |
 | F2 | `multimodal_train.ipynb` | Sentinel isečak + footprint raster istog naselja | zajednički model: dva ResNet-18 trupa, konkatenacija embeddinga, jedna regresiona glava, end-to-end |
 
 Svi pristupi dele isti evaluacioni protokol (`src/procena`): 5-struka GroupKFold
@@ -41,7 +41,7 @@ src/procena/           zajednicki modul (uvoze ga svi notebooki)
   train.py             seeding, trening/eval prolaz, dvofazni trening (glava -> fine-tuning)
   cv.py                GroupKFold foldovi, OOF metrike, CV rezime grafik
   okruzenje.py         detekcija Databricks/Colab, MLflow tracking, izlazni dir, cuvanje OOF-a
-notebooks/             Databricks source format (.py)
+notebooks/             Databricks source format (.py) + generisani .ipynb
   EDA.ipynb            analiza podataka: jedinice, populacija, footprinti, snimci
   sentinel_train_v1    pristup 1 (Sentinel CNN, pop i density cilj)
   tiles_train          pristup 1b (plocice + agregaciona loss, log vs linear)
@@ -78,13 +78,25 @@ python scripts/package_for_colab.py       # data_upload.zip + footprint_upload.z
 python scripts/package_tiles.py           # tiles_upload.zip
 ```
 
+## Notebooci u .ipynb formatu
+
+Izvor je Databricks `.py` format (`notebooks/*.py`) — to je ono što se menja.
+`.ipynb` verzije se iz njega generišu (markdown i `%pip` ćelije se vraćaju u
+prave notebook ćelije), pa ih regenerisati posle svake izmene `.py` fajla:
+
+```
+python scripts/db_py_to_ipynb.py            # svi notebooks/*.py
+python scripts/db_py_to_ipynb.py notebooks/fusion_train.py
+```
+
 ## Trening
 
 **Databricks** (primarno): repo je povezan kao Databricks Repo; podaci su
 raspakovani na UC Volume (`.../raw_data/data`). Otvoriti notebook i `Run all` —
 putanje, MLflow tracking i izlazi se podese sami. Redosled za fuziju: prvo
-trenirački notebooki (1/1b/2 — svaki snimi `oof_<pristup>.parquet`), pa
-`fusion_train`; `multimodal_train` je nezavisan (trenira iz sirovih ulaza).
+trenirački notebooki (1/1b/2 i F2 `multimodal_train`, koji trenira iz sirovih
+ulaza — svaki snimi `oof_<pristup>.parquet`), pa `fusion_train`. `fusion_train`
+uzima svaki OOF parquet koji zatekne, pa radi i sa podskupom pristupa.
 
 **Colab** (rezerva): kloniraj repo u `/content` (zbog `src/procena`), uploaduj
 odgovarajući zip u `/content`, pa pokreni ćelije redom. MLflow: ako su postavljeni

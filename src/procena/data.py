@@ -125,6 +125,9 @@ def napravi_loadere(
         Naselja(train_frame, mean, std, augment=True),
         batch_size=batch_size,
         shuffle=True,
+        # poslednji batch od tacno 1 uzorka ruši BatchNorm u trening modu
+        # ("Expected more than 1 value per channel"); tada ga preskoci
+        drop_last=len(train_frame) % batch_size == 1,
         generator=gen,
         worker_init_fn=_sw if NW else None,
         num_workers=NW,
