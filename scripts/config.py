@@ -48,10 +48,10 @@ OVERTURE_OKRUG = _p("overture_okrug")   # otisci po okrugu; ulaz za rasterizacij
 OVERTURE_RURAL = _p("overture_rural")   # otisci uzorka sela (dijagnostika)
 OKRUG_COMP     = _p("okrug_comp")       # Sentinel kompoziti po okrugu
 
-CUTOUTS        = _p("cutouts")           # 1 isecak po naselju (pristup 1)
+CUTOUTS        = _p("cutouts")           # 1 isecak po naselju (za multimodalnu fuziju F2)
 CUTOUTS_INDEX  = _p("cutouts", "index.csv")
 FOOTPRINT_CUT  = _p("footprint_cutouts")  # rasterizovani otisci (pristup 2)
-TILES          = _p("tiles")             # plocice 2.24 km (pristup 1b)
+TILES          = _p("tiles")             # plocice 2.24 km (pristup 1)
 
 
 def obezbedi(*putanje: str) -> None:

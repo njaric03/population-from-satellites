@@ -3,10 +3,10 @@
 Podpaketi prate grane pipeline-a:
 
 * ``preprocessing`` – labele i master tabela naselja; zajednicko svim pristupima.
-* ``sentinel``      – satelitski ulazi: isecak po naselju (pristup 1) i
-                      plocice 2.24 km (pristup 1b).
-* ``footprint``     – otisci zgrada iz Overture i njihova rasterizacija (pristup 2).
-* ``diagnostics``   – provere kvaliteta podataka; ne ulaze u pipeline.
+* ``sentinel``      – satelitski ulazi: kompoziti po okrugu, isecak po naselju
+                      (za multimodalnu fuziju) i plocice 2.24 km (pristup 1).
+* ``footprint``     – otisci zgrada iz Overture, rasterizacija (pristup 2) i
+                      provera pokrivenosti (``coverage``, van pipeline-a).
 
 Izlaz pipeline-a je ``data/`` na disku; na Databricks se prenosi na UC Volume.
 

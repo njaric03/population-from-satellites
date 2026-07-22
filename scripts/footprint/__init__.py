@@ -1,1 +1,2 @@
-"""Otisci zgrada iz Overture i rasterizacija u kanale (pristup 2)."""
+"""Otisci zgrada iz Overture: atributi po naselju, rasterizacija (pristup 2),
+provera pokrivenosti u selima."""
