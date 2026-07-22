@@ -12,9 +12,10 @@ Dva komplementarna osnovna pristupa i dva načina fuzije:
 | # | Notebook | Ulaz | Ideja |
 |---|---|---|---|
 | 1 | `02_tiles_train.ipynb` | Sentinel-2 pločice 2.24 km | broj stanovnika po pločici (softplus), suma pločica = naselje, loss na sumi — naselja variraju od sela do grada, pa fiksan isečak po naselju ne radi (MAUP) |
-| 2 | `03_footprint_train.ipynb` | rasterizovani otisci zgrada (2 kanala: pokrivenost, zapreminska gustina) | ResNet-18 regresija na `log1p(pop)` |
-| F1 | `05_fusion_train.ipynb` | OOF predikcije pristupa 1/2 i F2 | stacking (Ridge u log prostoru) + post-hoc kalibracija po pristupu; bez GPU-a |
-| F2 | `04_multimodal_train.ipynb` | Sentinel isečak + footprint raster istog naselja | zajednički model: dva ResNet-18 trupa, konkatenacija embeddinga, jedna regresiona glava, end-to-end |
+| 2 | `03_footprint_train.ipynb` | 15 strukturiranih atributa otisaka zgrada po naselju (količina, oblik, raspored, visina) | MLP na `log1p(pop)`; gradient boosting kao referentna linija |
+| 2b | `03_footprint_train.ipynb` | isti otisci, rasterizovani u 2 kanala (pokrivenost, zapreminska gustina) | ResNet-18 regresija na `log1p(pop)` — da li prostorni raspored nosi nešto preko brojača? |
+| F1 | `05_fusion_train.ipynb` | OOF predikcije pristupa 1/2/2b i F2 | stacking (Ridge u log prostoru) + post-hoc kalibracija po pristupu; bez GPU-a |
+| F2 | `04_multimodal_train.ipynb` | Sentinel isečak + footprint raster + strukturirani atributi istog naselja | jedan model koji istovremeno dobija strukturirane podatke i sliku: dva ResNet-18 trupa (512-dim svaki) + MLP grana (32-dim), konkatenacija u zajedničku glavu, end-to-end |
 
 Svi pristupi dele isti evaluacioni protokol (`core`): 5-struka GroupKFold
 podela po opštinama (bez prostornog curenja između trening i validacionog skupa),
@@ -43,14 +44,15 @@ core/                  zajednicki modul (uvoze ga svi treniracki notebooci)
 notebooks/             Jupyter notebooci; prefiks = redosled pokretanja
   01_eda.ipynb              analiza podataka: jedinice, populacija, footprinti, snimci
   02_tiles_train.ipynb      pristup 1 (plocice + agregaciona loss, log vs linear)
-  03_footprint_train.ipynb  pristup 2 (CNN nad otiscima zgrada)
-  04_multimodal_train.ipynb fuzija F2 (zajednicki dvogranski model)
+  03_footprint_train.ipynb  pristup 2 (tabelarni MLP + GBM referenca) i 2b (CNN nad rasterom)
+  04_multimodal_train.ipynb fuzija F2 (zajednicki trogranski model: 2 slike + atributi)
   05_fusion_train.ipynb     fuzija F1 (stacking nad OOF predikcijama 02-04)
 scripts/               priprema podataka (lokalno; paket, pokrece se sa -m)
   config.py            sve putanje projekta na jednom mestu; uvoze ga ostale skripte
   preprocessing/       labele i master tabela naselja — zajednicko svim pristupima
   sentinel/            satelitski ulazi: kompoziti, isecci (za F2), plocice (pristup 1)
-  footprint/           otisci zgrada: atributi, rasterizacija (pristup 2), coverage provera
+  footprint/           otisci zgrada: strukturirani atributi (pristup 2),
+                       rasterizacija (2b), coverage provera
 results/               terminalne tabele i sazeci (.csv, .json)
 figures/               terminalne slike (.png)
 data/                  nije u repozitorijumu (preveliko; prenosi se na Databricks UC Volume)
@@ -88,9 +90,9 @@ svaki korak čita izlaz nekog ranijeg:
 ```
 python -m scripts.preprocessing.build_labels        # RZS popis .xlsx + geometrija -> naselje_pop_final.csv
 python -m scripts.preprocessing.make_dataset_table  # master tabela (centroid, okrug, area) -> naselje_table.parquet
-python -m scripts.footprint.per_naselje             # otisci po okrugu iz Overture -> naselje_footprints.parquet
+python -m scripts.footprint.per_naselje             # Overture otisci -> 15 atributa po naselju (pristup 2)
 python -m scripts.sentinel.cutouts subset           # openEO: kompozit po okrugu -> 1 isecak po naselju
-python -m scripts.footprint.rasters                 # otisci -> 2-kanalni rasteri (pristup 2)
+python -m scripts.footprint.rasters                 # otisci -> 2-kanalni rasteri (pristup 2b)
 python -m scripts.sentinel.tiles                    # kompoziti -> plocice 2.24 km (pristup 1)
 ```
 

@@ -22,6 +22,7 @@ mlflow>=3.0              # mlflow.pytorch.log_model(name=...) postoji tek od 3.0
 # --- priprema podataka (scripts/) i EDA ---
 geopandas>=1.0
 shapely>=2.0
+scipy>=1.11               # cKDTree: atributi rasporeda zgrada (footprint/per_naselje)
 pyogrio>=0.9             # ucitavanje .gpkg geometrija
 rasterio>=1.3            # rasterizacija otisaka zgrada, citanje kompozita
 openpyxl>=3.1            # RZS popis .xlsx
