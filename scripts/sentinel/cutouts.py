@@ -1,7 +1,7 @@
 """Faza 2.3 (batch) - Sentinel isečci preko openEO BATCH poslova po okrugu.
 Po okrugu: jedan medijan kompozit (6 opsega, 10m, 2024, oblaci<30) -> lokalno
 isecanje 224px prozora oko centroida svakog naselja. 25 poslova umesto 4720 poziva.
-Pokretanje: python cutout_sentinel_batch.py test   (1 najmanji okrug)  |  ... full
+Pokretanje: python -m scripts.sentinel.cutouts test   (1 najmanji okrug)  |  ... subset  |  ... full
 Resumable: preskace naselja iz index.csv i okruge sa postojecim kompozitom.
 """
 import sys, os, time
@@ -9,18 +9,19 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 import numpy as np, pandas as pd, geopandas as gpd, pyogrio, rasterio, openeo
 from rasterio.windows import from_bounds, Window
 
-BASE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
-CUT = BASE + r"\cutouts"; COMP = BASE + r"\okrug_comp"
+from scripts import config
+
+CUT = config.CUTOUTS; COMP = config.OKRUG_COMP
 os.makedirs(CUT, exist_ok=True); os.makedirs(COMP, exist_ok=True)
-IDX = CUT + r"\index.csv"
+IDX = config.CUTOUTS_INDEX
 BANDS = ["B02", "B03", "B04", "B08", "B11", "B12"]; PX = 224; H = 1120; PAD = 1300
 
 mode = sys.argv[1] if len(sys.argv) > 1 else "test"
-nas = gpd.read_file(BASE + r"\naselja\naselje.gpkg")[["naselje_maticni_broj", "opstina_maticni_broj", "geometry"]]
-ops = pyogrio.read_dataframe(BASE + r"\opstine\opstine.gpkg",
+nas = gpd.read_file(config.NASELJA_GPKG)[["naselje_maticni_broj", "opstina_maticni_broj", "geometry"]]
+ops = pyogrio.read_dataframe(config.OPSTINE_GPKG,
                              read_geometry=False)[["opstina_maticni_broj", "okrug_sifra"]]
 nas = nas.merge(ops, on="opstina_maticni_broj", how="left")
-tab = pd.read_parquet(BASE + r"\dataset\naselje_table.parquet")[["naselje_maticni_broj", "cx", "cy", "pop"]]
+tab = pd.read_parquet(config.NASELJE_TABLE)[["naselje_maticni_broj", "cx", "cy", "pop"]]
 nas = nas.merge(tab, on="naselje_maticni_broj", how="inner")
 
 okr = sorted(nas.okrug_sifra.dropna().unique().tolist())

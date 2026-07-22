@@ -9,9 +9,10 @@ import sys, re, os
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 import pandas as pd, openpyxl, pyogrio
 
-BASE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
-XLSX = BASE + r"\rzs\ukupno_stanovnika_naselja.xlsx"
-NAS  = BASE + r"\naselja\naselje.gpkg"
+from scripts import config
+
+XLSX = config.RZS_XLSX
+NAS  = config.NASELJA_GPKG
 
 def n_strip(s):
     s = re.sub(r"\s*\(.*?\)\s*", " ", str(s))
@@ -87,6 +88,6 @@ if len(resid):
 
 out = g[g["pop"].notna()][["naselje_maticni_broj", "naselje_ime", "opstina_ime", "pop", "stage"]].copy()
 out["pop"] = out["pop"].astype(int)
-out.to_csv(BASE + r"\rzs\naselje_pop_final.csv", index=False, encoding="utf-8-sig")
+out.to_csv(config.NASELJE_POP, index=False, encoding="utf-8-sig")
 print("WROTE naselje_pop_final.csv | pop sum:", int(out["pop"].sum()),
       "| zeros:", int((out["pop"] == 0).sum()))

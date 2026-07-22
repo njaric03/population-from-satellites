@@ -6,12 +6,15 @@ import sys, os, subprocess
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 import pandas as pd, geopandas as gpd
 
-BASE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
-OUT = BASE + r"\eda"; os.makedirs(OUT, exist_ok=True)
-TMP = BASE + r"\overture_rural"; os.makedirs(TMP, exist_ok=True)
+from scripts import config
 
-g = gpd.read_file(BASE + r"\naselja\naselje.gpkg")
-pop = pd.read_csv(BASE + r"\rzs\naselje_pop_final.csv")
+# rezultat je terminalni artefakt (nista ga dalje ne konzumira kao ulaz) -> results/
+OUT = config.RESULTS
+TMP = config.OVERTURE_RURAL      # kes Overture preuzimanja
+config.obezbedi(OUT, TMP)
+
+g = gpd.read_file(config.NASELJA_GPKG)
+pop = pd.read_csv(config.NASELJE_POP)
 g = g.merge(pop[["naselje_maticni_broj", "pop"]], on="naselje_maticni_broj", how="inner")
 g4326 = g.to_crs(4326)
 
@@ -51,7 +54,7 @@ for idx, r in samp.iterrows():
 df = pd.DataFrame(rows, columns=["naselje", "opstina", "pop", "buildings",
                                  "roof_m2", "bldg_per_cap", "top_source"])
 print(df.to_string(index=False))
-df.to_csv(OUT + r"\rural_footprints.csv", index=False, encoding="utf-8-sig")
+df.to_csv(os.path.join(OUT, "rural_footprints.csv"), index=False, encoding="utf-8-sig")
 ok = df[df.buildings > 0]
 print("\nzero-coverage villages:", int((df.buildings == 0).sum()), "/", len(df))
 print("median bldg/cap (covered):", round(float(ok.bldg_per_cap.median()), 2) if len(ok) else "n/a")

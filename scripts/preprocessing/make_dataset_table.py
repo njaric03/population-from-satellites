@@ -6,12 +6,13 @@ import sys, os
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 import geopandas as gpd, pandas as pd, pyogrio
 
-BASE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
-OUT = BASE + r"\dataset"; os.makedirs(OUT, exist_ok=True)
+from scripts import config
 
-nas = gpd.read_file(BASE + r"\naselja\naselje.gpkg")
-pop = pd.read_csv(BASE + r"\rzs\naselje_pop_final.csv")
-ops = pyogrio.read_dataframe(BASE + r"\opstine\opstine.gpkg",
+OUT = config.DATASET_DIR; config.obezbedi(OUT)
+
+nas = gpd.read_file(config.NASELJA_GPKG)
+pop = pd.read_csv(config.NASELJE_POP)
+ops = pyogrio.read_dataframe(config.OPSTINE_GPKG,
                              read_geometry=False)[["opstina_maticni_broj", "okrug_sifra"]]
 
 nas = nas.merge(pop[["naselje_maticni_broj", "pop", "stage"]], on="naselje_maticni_broj", how="inner")
@@ -29,8 +30,8 @@ nas["lon"] = c4.x.round(6); nas["lat"] = c4.y.round(6)
 cols = ["naselje_maticni_broj", "naselje_ime", "opstina_maticni_broj", "opstina_ime",
         "okrug_sifra", "pop", "stage", "area_km2", "cx", "cy", "lon", "lat"]
 tab = pd.DataFrame(nas[cols])
-tab.to_parquet(OUT + r"\naselje_table.parquet", index=False)
-tab.to_csv(OUT + r"\naselje_table.csv", index=False, encoding="utf-8-sig")
+tab.to_parquet(config.NASELJE_TABLE, index=False)
+tab.to_csv(config.NASELJE_TABLE_CSV, index=False, encoding="utf-8-sig")
 
 print("rows:", len(tab), "| pop sum:", int(tab["pop"].sum()),
       "| centroid izvan poligona popravljeno:", int((~inside).sum()))

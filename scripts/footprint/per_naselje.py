@@ -6,12 +6,13 @@ import sys, os, subprocess
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 import pandas as pd, geopandas as gpd, numpy as np, pyogrio
 
-BASE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
-OUT = BASE + r"\dataset"; TMP = BASE + r"\overture_okrug"; os.makedirs(TMP, exist_ok=True)
+from scripts import config
 
-nas = gpd.read_file(BASE + r"\naselja\naselje.gpkg")[
+OUT = config.DATASET_DIR; TMP = config.OVERTURE_OKRUG; config.obezbedi(OUT, TMP)
+
+nas = gpd.read_file(config.NASELJA_GPKG)[
     ["naselje_maticni_broj", "opstina_maticni_broj", "geometry"]]
-ops = pyogrio.read_dataframe(BASE + r"\opstine\opstine.gpkg",
+ops = pyogrio.read_dataframe(config.OPSTINE_GPKG,
                              read_geometry=False)[["opstina_maticni_broj", "okrug_sifra"]]
 nas = nas.merge(ops, on="opstina_maticni_broj", how="left")     # 32634
 
@@ -50,13 +51,13 @@ for k in okruzi:
 fps = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(
     columns=["naselje_maticni_broj", "n_buildings", "roof_area_m2", "vol_proxy"])
 
-tab = pd.read_parquet(OUT + r"\naselje_table.parquet")
+tab = pd.read_parquet(config.NASELJE_TABLE)
 m = tab.merge(fps, on="naselje_maticni_broj", how="left")
 for c in ["n_buildings", "roof_area_m2", "vol_proxy"]:
     m[c] = m[c].fillna(0)
 m["roof_area_m2"] = m["roof_area_m2"].round(0); m["vol_proxy"] = m["vol_proxy"].round(0)
-m.to_csv(OUT + r"\naselje_footprints.csv", index=False, encoding="utf-8-sig")
-m.to_parquet(OUT + r"\naselje_footprints.parquet", index=False)
+m.to_csv(os.path.join(OUT, "naselje_footprints.csv"), index=False, encoding="utf-8-sig")
+m.to_parquet(config.NASELJE_FOOTPRINTS, index=False)
 
 zero = int((m.n_buildings == 0).sum())
 ok = m[m.n_buildings > 0]

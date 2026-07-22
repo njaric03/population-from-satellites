@@ -9,15 +9,15 @@ from shapely.geometry import box
 from rasterio.features import rasterize, MergeAlg
 from rasterio.transform import from_origin
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BASE = os.path.join(ROOT, "data")
-OKR = BASE + r"\overture_okrug"
-OUT = BASE + r"\footprint_cutouts"; os.makedirs(OUT, exist_ok=True)
+from scripts import config
+
+OKR = config.OVERTURE_OKRUG
+OUT = config.FOOTPRINT_CUT; config.obezbedi(OUT)
 PX, H, SUB = 224, 1120, 4          # 224 px, pola strane 1120 m, 4x supersample (2.5 m)
 FPX, RES = PX * SUB, 10.0 / SUB
 
-tab = pd.read_parquet(BASE + r"\dataset\naselje_table.parquet")   # ima okrug_sifra
-imaju_cutout = {int(os.path.splitext(os.path.basename(f))[0]) for f in glob.glob(BASE + r"\cutouts\*.npy")}
+tab = pd.read_parquet(config.NASELJE_TABLE)   # ima okrug_sifra
+imaju_cutout = {int(os.path.splitext(os.path.basename(f))[0]) for f in glob.glob(config.CUTOUTS + r"\*.npy")}
 tab = tab[tab.naselje_maticni_broj.isin(imaju_cutout)].copy()
 print("naselja za rasterizaciju:", len(tab))
 

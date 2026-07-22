@@ -7,19 +7,19 @@ import os, glob
 import numpy as np, pandas as pd, geopandas as gpd, pyogrio, rasterio
 from rasterio.windows import from_bounds
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BASE = os.path.join(ROOT, "data")
-COMP = BASE + r"\okrug_comp"; OKR = BASE + r"\overture_okrug"
-OUT = BASE + r"\tiles"; os.makedirs(OUT, exist_ok=True)
+from scripts import config
+
+COMP = config.OKRUG_COMP; OKR = config.OVERTURE_OKRUG
+OUT = config.TILES; config.obezbedi(OUT)
 PX, STEP = 224, 2240.0; H = STEP / 2
 
 have_comp = {int(os.path.basename(f).split("_")[1].split(".")[0]) for f in glob.glob(COMP + r"\okrug_*.tiff")}
 print("okruzi sa kompozitom:", sorted(have_comp))
 
-nas = gpd.read_file(BASE + r"\naselja\naselje.gpkg")[["naselje_maticni_broj", "opstina_maticni_broj", "geometry"]]
-ops = pyogrio.read_dataframe(BASE + r"\opstine\opstine.gpkg", read_geometry=False)[["opstina_maticni_broj", "okrug_sifra"]]
+nas = gpd.read_file(config.NASELJA_GPKG)[["naselje_maticni_broj", "opstina_maticni_broj", "geometry"]]
+ops = pyogrio.read_dataframe(config.OPSTINE_GPKG, read_geometry=False)[["opstina_maticni_broj", "okrug_sifra"]]
 nas = nas.merge(ops, on="opstina_maticni_broj", how="left")
-tab = pd.read_parquet(BASE + r"\dataset\naselje_table.parquet")[["naselje_maticni_broj", "cx", "cy", "pop"]]
+tab = pd.read_parquet(config.NASELJE_TABLE)[["naselje_maticni_broj", "cx", "cy", "pop"]]
 nas = nas.merge(tab, on="naselje_maticni_broj", how="inner")
 nas = nas[nas.okrug_sifra.isin(have_comp)]
 print("naselja:", len(nas))
@@ -69,7 +69,7 @@ for k in sorted(nas.okrug_sifra.unique()):
     print(f"okrug {int(k)}: plocica do sada {len(rows)}", flush=True)
 
 idx = pd.DataFrame(rows)
-idx.to_csv(BASE + r"\dataset\tiles_index.csv", index=False, encoding="utf-8-sig")
+idx.to_csv(config.TILES_INDEX, index=False, encoding="utf-8-sig")
 per = idx.groupby("naselje_maticni_broj").size()
 print(f"DONE: {len(idx)} plocica / {idx.naselje_maticni_broj.nunique()} naselja "
       f"| plocica/naselje: med {int(per.median())} max {int(per.max())}")

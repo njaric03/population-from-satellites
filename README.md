@@ -11,13 +11,13 @@ Dva komplementarna osnovna pristupa i dva načina fuzije:
 
 | # | Notebook | Ulaz | Ideja |
 |---|---|---|---|
-| 1 | `sentinel_train_v1.ipynb` | Sentinel-2, 6 opsega, 1 isečak po naselju | ResNet-18 regresija na `log1p(pop)` ili `log1p(gustina)` |
-| 1b | `tiles_train.ipynb` | Sentinel-2 pločice 2.24 km | broj stanovnika po pločici (softplus), suma pločica = naselje, loss na sumi — rešava problem velikih naselja (MAUP) |
-| 2 | `footprint_train.ipynb` | rasterizovani otisci zgrada (2 kanala: pokrivenost, zapreminska gustina) | ResNet-18 regresija na `log1p(pop)` |
-| F1 | `fusion_train.ipynb` | OOF predikcije pristupa 1/1b/2 i F2 | stacking (Ridge u log prostoru) + post-hoc kalibracija po pristupu; bez GPU-a |
-| F2 | `multimodal_train.ipynb` | Sentinel isečak + footprint raster istog naselja | zajednički model: dva ResNet-18 trupa, konkatenacija embeddinga, jedna regresiona glava, end-to-end |
+| 1 | `02_sentinel_train.ipynb` | Sentinel-2, 6 opsega, 1 isečak po naselju | ResNet-18 regresija na `log1p(pop)` ili `log1p(gustina)` |
+| 1b | `03_tiles_train.ipynb` | Sentinel-2 pločice 2.24 km | broj stanovnika po pločici (softplus), suma pločica = naselje, loss na sumi — rešava problem velikih naselja (MAUP) |
+| 2 | `04_footprint_train.ipynb` | rasterizovani otisci zgrada (2 kanala: pokrivenost, zapreminska gustina) | ResNet-18 regresija na `log1p(pop)` |
+| F1 | `06_fusion_train.ipynb` | OOF predikcije pristupa 1/1b/2 i F2 | stacking (Ridge u log prostoru) + post-hoc kalibracija po pristupu; bez GPU-a |
+| F2 | `05_multimodal_train.ipynb` | Sentinel isečak + footprint raster istog naselja | zajednički model: dva ResNet-18 trupa, konkatenacija embeddinga, jedna regresiona glava, end-to-end |
 
-Svi pristupi dele isti evaluacioni protokol (`src/procena`): 5-struka GroupKFold
+Svi pristupi dele isti evaluacioni protokol (`core`): 5-struka GroupKFold
 podela po opštinama (bez prostornog curenja između trening i validacionog skupa),
 out-of-fold (OOF) predikcija za svako naselje tačno jednom, isti skup metrika i
 rezime grafik — rezultati su direktno uporedivi između pristupa.
@@ -31,27 +31,41 @@ Glavne metrike su zato: `oof_r2_log` (R² u log1p prostoru), `oof_medape`
 populacijom), `oof_bias` (Σpred/Σstvarno) i `oof_kalib_nagib` (nagib log-log
 regresije; > 1 = kompresija predikcija ka sredini). Dodatno: greške po
 veličinskim stratumima naselja i opštinska agregacija sa i bez dve najveće
-opštine. Detalji u docstringu `procena.cv.oof_metrics`.
+opštine. Detalji u docstringu `core.cv.oof_metrics`.
 
 ## Struktura
 
 ```
-src/procena/           zajednicki modul (uvoze ga svi notebooki)
+core/                  zajednicki modul (uvoze ga svi treniracki notebooci)
   data.py              normalizacija po opsegu, Dataset, DataLoader-i
   train.py             seeding, trening/eval prolaz, dvofazni trening (glava -> fine-tuning)
   cv.py                GroupKFold foldovi, OOF metrike, CV rezime grafik
-  okruzenje.py         detekcija Databricks/Colab, MLflow tracking, izlazni dir, cuvanje OOF-a
-notebooks/             Databricks source format (.py) + generisani .ipynb
-  EDA.ipynb            analiza podataka: jedinice, populacija, footprinti, snimci
-  sentinel_train_v1    pristup 1 (Sentinel CNN, pop i density cilj)
-  tiles_train          pristup 1b (plocice + agregaciona loss, log vs linear)
-  footprint_train      pristup 2 (CNN nad otiscima zgrada)
-  fusion_train         fuzija F1 (stacking + kalibracija nad OOF predikcijama)
-  multimodal_train     fuzija F2 (zajednicki dvogranski model)
-scripts/               priprema podataka + dijagnostika (lokalno — videti dole)
-results/               mali artefakti: EDA grafici, sazeci, tabela labela
+  environment.py       detekcija Databricks/Colab, MLflow tracking, izlazni dir, cuvanje OOF-a
+notebooks/             Jupyter notebooci; prefiks = redosled pokretanja
+  01_eda.ipynb              analiza podataka: jedinice, populacija, footprinti, snimci
+  02_sentinel_train.ipynb   pristup 1  (Sentinel CNN, pop i density cilj)
+  03_tiles_train.ipynb      pristup 1b (plocice + agregaciona loss, log vs linear)
+  04_footprint_train.ipynb  pristup 2  (CNN nad otiscima zgrada)
+  05_multimodal_train.ipynb fuzija F2  (zajednicki dvogranski model)
+  06_fusion_train.ipynb     fuzija F1  (stacking nad OOF predikcijama 01-05)
+scripts/               priprema podataka (lokalno; paket, pokrece se sa -m)
+  config.py            sve putanje projekta na jednom mestu; uvoze ga ostale skripte
+  preprocessing/       labele i master tabela naselja — zajednicko svim pristupima
+  sentinel/            satelitski ulazi: isecci (pristup 1), plocice (pristup 1b)
+  footprint/           otisci zgrada iz Overture i rasterizacija (pristup 2)
+  packaging/           zip paketi za Colab
+  diagnostics/         provere kvaliteta podataka, van pipeline-a
+results/               terminalne tabele i sazeci (.csv, .json)
+figures/               terminalne slike (.png)
 data/                  nije u repozitorijumu (preveliko; deli se kao zip preko Drive-a)
+requirements.txt       zavisnosti za lokalni rad
 ```
+
+`06_fusion_train` je numerisan poslednji jer jedini cita tudje izlaze
+(`oof_<pristup>.parquet`); 01-05 su medjusobno nezavisni.
+
+Izlazi runa (`out/`, `mlruns/`, `.pt` tezine, `oof_*.parquet`) se ne cuvaju u
+git-u — regenerisu se pokretanjem i ostaju uz MLflow run kao artefakti.
 
 ## Izvori podataka
 
@@ -68,48 +82,74 @@ learning to understand economic well-being in Africa*, Nature Communications (20
 ## Priprema podataka (lokalno, redom)
 
 ```
-python scripts/build_labels.py            # RZS popis + geometrija naselja
-python scripts/make_dataset_table.py      # master tabela naselja
-python scripts/footprints_per_naselje.py  # otisci zgrada po naselju (Overture)
-python scripts/cutout_sentinel_batch.py subset   # Sentinel iseci preko openEO
-python scripts/footprint_rasters.py       # rasterizacija otisaka (pristup 2)
-python scripts/tile_cutouts.py            # plocice (pristup 1b)
-python scripts/package_for_colab.py       # data_upload.zip + footprint_upload.zip
-python scripts/package_tiles.py           # tiles_upload.zip
+pip install -r requirements.txt
 ```
 
-Van ovog redosleda, kao dijagnostika:
+Skripte su paket, pa se pokreću iz korena repoa sa `-m` (tako `from scripts
+import config` radi bez petljanja po `sys.path`). Redosled nije proizvoljan —
+svaki korak čita izlaz nekog ranijeg:
 
 ```
-python scripts/rural_footprints.py        # pokrivenost Overture otiscima u selima
+python -m scripts.preprocessing.build_labels        # RZS popis .xlsx + geometrija -> naselje_pop_final.csv
+python -m scripts.preprocessing.make_dataset_table  # master tabela (centroid, okrug, area) -> naselje_table.parquet
+python -m scripts.footprint.per_naselje             # otisci po okrugu iz Overture -> naselje_footprints.parquet
+python -m scripts.sentinel.cutouts subset           # openEO: kompozit po okrugu -> 1 isecak po naselju
+python -m scripts.footprint.rasters                 # otisci -> 2-kanalni rasteri (pristup 2)
+python -m scripts.sentinel.tiles                    # kompoziti -> plocice 2.24 km (pristup 1b)
+python -m scripts.packaging.colab                   # data_upload.zip + footprint_upload.zip
+python -m scripts.packaging.tiles                   # tiles_upload.zip
+```
+
+Zavisnosti (zašto baš taj redosled):
+
+```
+preprocessing.build_labels
+  └─> preprocessing.make_dataset_table
+        ├─> footprint.per_naselje ─┐
+        │                          ├─> footprint.rasters ─> packaging.colab
+        └─> sentinel.cutouts ──────┤
+                                   └─> sentinel.tiles ────> packaging.tiles
+```
+
+`footprint.per_naselje` i `sentinel.cutouts` mogu paralelno — oba traže samo
+`naselje_table.parquet`. `footprint.rasters` i `sentinel.tiles` oba traže i
+otiske iz Overture i Sentinel izlaz: rasterizacija zato što crta zgrade preko
+isečka, a pločice zato što centroidima zgrada odbacuju prazne. `packaging.*`
+samo pakuje gotovo.
+
+Van pipeline-a, dijagnostika (traži samo `build_labels`, ne ulazi ni u šta):
+
+```
+python -m scripts.diagnostics.footprint_coverage    # pokrivenost Overture otiscima u selima
 ```
 
 Uzorkuje 6 sela (pop 50–800) i 2 depopulaciona naselja (pop 1–20) i izveštava broj
 zgrada, krovnu površinu i izvore. Provera rizika za pristup 2: ako su ML-generisani
 otisci retki u selima, izgrađenost je nepouzdan signal baš tamo gde je populacija
-najmanja. Rezultat ide u `data/eda/`.
+najmanja. Rezultat ide u `results/rural_footprints.csv`, odakle ga `01_eda` čita.
 
-## Notebooci u .ipynb formatu
+**Gde šta ide** (putanje su u [`scripts/config.py`](scripts/config.py), skripte
+ih uvoze odatle umesto da svaka sklapa svoje):
 
-Izvor je Databricks `.py` format (`notebooks/*.py`) — to je ono što se menja.
-`.ipynb` verzije se iz njega generišu (markdown i `%pip` ćelije se vraćaju u
-prave notebook ćelije), pa ih regenerisati posle svake izmene `.py` fajla:
+| | sadržaj | u gitu |
+|---|---|---|
+| `data/` | ulazi i međukoraci — sve što neki sledeći korak čita kao ulaz: geometrije, isečci, pločice, `naselje_table.parquet`, `naselje_pop_final.csv` | ne (preveliko) |
+| `results/` | terminalne tabele i sažeci (`.csv`, `.json`) | da |
+| `figures/` | terminalne slike (`.png`) | da |
+| `out/`, MLflow | težine po foldu, OOF predikcije, rezime grafici runa | ne (regeneriše se) |
 
-```
-python scripts/db_py_to_ipynb.py            # svi notebooks/*.py
-python scripts/db_py_to_ipynb.py notebooks/fusion_train.py
-```
+Terminalno = niko to dalje ne konzumira kao ulaz, nego se gleda ili predaje.
 
 ## Trening
 
 **Databricks** (primarno): repo je povezan kao Databricks Repo; podaci su
 raspakovani na UC Volume (`.../raw_data/data`). Otvoriti notebook i `Run all` —
 putanje, MLflow tracking i izlazi se podese sami. Redosled za fuziju: prvo
-trenirački notebooki (1/1b/2 i F2 `multimodal_train`, koji trenira iz sirovih
-ulaza — svaki snimi `oof_<pristup>.parquet`), pa `fusion_train`. `fusion_train`
+trenirački notebooki (1/1b/2 i F2 `05_multimodal_train`, koji trenira iz sirovih
+ulaza — svaki snimi `oof_<pristup>.parquet`), pa `06_fusion_train`. `06_fusion_train`
 uzima svaki OOF parquet koji zatekne, pa radi i sa podskupom pristupa.
 
-**Colab** (rezerva): kloniraj repo u `/content` (zbog `src/procena`), uploaduj
+**Colab** (rezerva): kloniraj repo u `/content` (zbog `core`), uploaduj
 odgovarajući zip u `/content`, pa pokreni ćelije redom. MLflow: ako su postavljeni
 `DATABRICKS_HOST` i `DATABRICKS_TOKEN` (env varijable / Colab Secrets), metrike
 idu u zajednički Databricks eksperiment; bez njih u lokalni `mlruns/`. Težine

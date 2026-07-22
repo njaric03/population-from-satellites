@@ -15,10 +15,17 @@ __pycache__/
 venv/
 env/
 
+# Izlazi treninga: izlazni_dir() lokalno vraca "out/", podesi_mlflow() "mlruns/"
+out/
+mlruns/
+
 # Modeli i tezine
 *.pt
 *.pth
 *.safetensors
+
+# OOF predikcije (artefakt runa, regenerisu se; MLflow ih cuva uz run)
+*.parquet
 
 # OS i editori
 .DS_Store
