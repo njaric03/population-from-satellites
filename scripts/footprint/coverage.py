@@ -59,3 +59,38 @@ ok = df[df.buildings > 0]
 print("\nzero-coverage villages:", int((df.buildings == 0).sum()), "/", len(df))
 print("median bldg/cap (covered):", round(float(ok.bldg_per_cap.median()), 2) if len(ok) else "n/a")
 print("source tally top:", df.top_source.value_counts().to_dict())
+
+
+# === popunjenost Overture atributa po okrugu ===
+# Razlog zasto per_naselje racuna atribute iskljucivo iz geometrije: opisni atributi
+# su retki i, sto je gore, neravnomerno popunjeni — gusce mapirani okruzi su i
+# urbaniji, pa bi popunjenost bila proksi za urbanost a ne za izgradjenost.
+import glob
+
+ATR = ["num_floors", "height", "subtype", "class", "roof_shape"]
+redovi = []
+for f in sorted(glob.glob(os.path.join(config.OVERTURE_OKRUG, "okrug_*.parquet"))):
+    try:
+        b = pd.read_parquet(f, columns=ATR)
+    except Exception:
+        continue
+    red = {"okrug": os.path.basename(f).replace("okrug_", "").replace(".parquet", ""),
+           "zgrada": len(b)}
+    for a in ATR:
+        red[a] = round(100 * float(b[a].notna().mean()), 2)
+    redovi.append(red)
+
+if redovi:
+    atr_df = pd.DataFrame(redovi)
+    uk = atr_df["zgrada"].sum()
+    ukupno = {"okrug": "UKUPNO", "zgrada": int(uk)}
+    for a in ATR:
+        ukupno[a] = round(float((atr_df[a] / 100 * atr_df["zgrada"]).sum() / uk * 100), 2)
+    atr_df = pd.concat([atr_df, pd.DataFrame([ukupno])], ignore_index=True)
+    put = os.path.join(OUT, "overture_popunjenost_atributa.csv")
+    atr_df.to_csv(put, index=False, encoding="utf-8-sig")
+    print(f"\n=== popunjenost Overture atributa (% zgrada), {len(redovi)} okruga ===")
+    print(atr_df.tail(6).to_string(index=False))
+    print(f"WROTE {put}")
+else:
+    print("\n(nema kesiranih okruga u", config.OVERTURE_OKRUG, "- pokreni footprint.per_naselje)")

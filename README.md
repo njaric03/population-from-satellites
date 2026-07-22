@@ -12,10 +12,10 @@ Dva komplementarna osnovna pristupa i dva načina fuzije:
 | # | Notebook | Ulaz | Ideja |
 |---|---|---|---|
 | 1 | `02_tiles_train.ipynb` | Sentinel-2 pločice 2.24 km | broj stanovnika po pločici (softplus), suma pločica = naselje, loss na sumi — naselja variraju od sela do grada, pa fiksan isečak po naselju ne radi (MAUP) |
-| 2 | `03_footprint_train.ipynb` | 15 strukturiranih atributa otisaka zgrada po naselju (količina, oblik, raspored, visina) | MLP na `log1p(pop)`; gradient boosting kao referentna linija |
-| 2b | `03_footprint_train.ipynb` | isti otisci, rasterizovani u 2 kanala (pokrivenost, zapreminska gustina) | ResNet-18 regresija na `log1p(pop)` — da li prostorni raspored nosi nešto preko brojača? |
+| 2 | `03_footprint_train.ipynb` | 14 strukturiranih atributa otisaka zgrada po naselju, svi iz geometrije (količina, oblik, raspored) | MLP na `log1p(pop)`; gradient boosting kao referentna linija |
+| 2b | `03_footprint_train.ipynb` | isti otisci, rasterizovani u 2 kanala (pokrivenost, gustina zgrada) | ResNet-18 regresija na `log1p(pop)` — da li prostorni raspored nosi nešto preko brojača? |
 | F1 | `05_fusion_train.ipynb` | OOF predikcije pristupa 1/2/2b i F2 | stacking (Ridge u log prostoru) + post-hoc kalibracija po pristupu; bez GPU-a |
-| F2 | `04_multimodal_train.ipynb` | Sentinel isečak + footprint raster + strukturirani atributi istog naselja | jedan model koji istovremeno dobija strukturirane podatke i sliku: dva ResNet-18 trupa (512-dim svaki) + MLP grana (32-dim), konkatenacija u zajedničku glavu, end-to-end |
+| F2 | `04_multimodal_train.ipynb` | Sentinel isečak + footprint raster + 14 strukturiranih atributa istog naselja | jedan model koji istovremeno dobija strukturirane podatke i sliku: dva ResNet-18 trupa (512-dim svaki) + MLP grana (32-dim), konkatenacija u zajedničku glavu, end-to-end |
 
 Svi pristupi dele isti evaluacioni protokol (`core`): 5-struka GroupKFold
 podela po opštinama (bez prostornog curenja između trening i validacionog skupa),
@@ -90,9 +90,9 @@ svaki korak čita izlaz nekog ranijeg:
 ```
 python -m scripts.preprocessing.build_labels        # RZS popis .xlsx + geometrija -> naselje_pop_final.csv
 python -m scripts.preprocessing.make_dataset_table  # master tabela (centroid, okrug, area) -> naselje_table.parquet
-python -m scripts.footprint.per_naselje             # Overture otisci -> 15 atributa po naselju (pristup 2)
+python -m scripts.footprint.per_naselje             # Overture otisci -> 14 atributa po naselju iz geometrije (pristup 2)
 python -m scripts.sentinel.cutouts subset           # openEO: kompozit po okrugu -> 1 isecak po naselju
-python -m scripts.footprint.rasters                 # otisci -> 2-kanalni rasteri (pristup 2b)
+python -m scripts.footprint.rasters                 # otisci -> 2-kanalni rasteri: pokrivenost + gustina (pristup 2b)
 python -m scripts.sentinel.tiles                    # kompoziti -> plocice 2.24 km (pristup 1)
 ```
 

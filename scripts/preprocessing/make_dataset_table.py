@@ -2,7 +2,7 @@
 Temelj za: Sentinel isecke (cx,cy), footprint rasterizaciju, GroupKFold (opstina/okrug).
 Izlaz: data/dataset/naselje_table.parquet (+ .csv pregled).
 """
-import sys, os
+import sys
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 import geopandas as gpd, pandas as pd, pyogrio
 

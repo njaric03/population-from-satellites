@@ -5,7 +5,7 @@
           samo ako je ime jedinstveno na obe strane (bez laznih spojeva).
 Cilj ~99.9%. Izlaz: naselje_pop_final.csv
 """
-import sys, re, os
+import sys, re
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 import pandas as pd, openpyxl, pyogrio
 
