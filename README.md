@@ -28,10 +28,20 @@ Raspodela populacije je ekstremno iskošena (medijana naselja ~265, Beograd ~1.4
 pa prosečne apsolutne greške i linearni R² na sumama dominiraju najveći gradovi.
 Glavne metrike su zato: `oof_r2_log` (R² u log1p prostoru), `oof_medape`
 (medijalna procentualna greška), `oof_wmape` (relativna greška ponderisana
-populacijom), `oof_bias` (Σpred/Σstvarno) i `oof_kalib_nagib` (nagib log-log
-regresije; > 1 = kompresija predikcija ka sredini). Dodatno: greške po
+populacijom) i `oof_bias` (Σpred/Σstvarno). Dijagnostika: `oof_kalib_nagib`
+(nagib log-log regresije; > 1 = kompresija predikcija ka sredini), medAPE po
 veličinskim stratumima naselja i opštinska agregacija sa i bez dve najveće
-opštine. Detalji u docstringu `core.cv.oof_metrics`.
+opštine.
+
+Skup je namerno sveden na 13 ključeva. Izostavljeni su `oof_rmse_log`
+(determinisana funkcija `oof_r2_log`), `oof_mae_log` (log jedinice se ne
+tumače), `oof_rmse_stanovnici` i linearni `oof_opstina_r2` (oba svodi Beograd
+na sebe). Detalji i obrazloženja u docstringu `core.cv.oof_metrics`.
+
+Kompresiju predikcija ka sredini ispravlja post-hoc kalibracija u
+`05_fusion_train`: za **svaki** pristup, pod istim foldovima, uči se monotona
+funkcija predviđeno → ispravljeno (Ridge nagib+presek u log-log, i isotonic).
+Monotona je pa ne menja redosled naselja — popravlja skalu, ne rangiranje.
 
 ## Struktura
 

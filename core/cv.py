@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.model_selection import GroupKFold
-from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
+from sklearn.metrics import r2_score, mean_absolute_error
 
 
 def napravi_foldove(
@@ -58,34 +58,40 @@ def oof_metrics(
     df: pd.DataFrame,
     group_col: str = "opstina_maticni_broj",
 ) -> dict:
-    """Standardni skup OOF metrika.
+    """Standardni skup OOF metrika — 13 kljuceva, bez redundantnih.
 
-    Pored R2/MAE/RMSE (log-prostor i stanovnici) i agregacije po opstini,
-    racuna i skup metrika otpornih na jako iskosenu raspodelu populacije
-    (medijana naselja ~265, maksimum ~260k — prosecne apsolutne greske i
-    linearni R2 na sumama dominiraju najveci gradovi):
+    Raspodela populacije je jako iskosena (medijana naselja ~265, maksimum
+    ~260k), pa prosecne apsolutne greske i linearni R2 na sumama dominiraju
+    najveci gradovi. Zato su glavne metrike relativne:
 
+    * ``oof_r2_log``        – R2 u log1p prostoru; glavni pokazatelj uklapanja.
     * ``oof_medape``        – medijalna apsolutna procentualna greska
       (samo naselja sa pop > 0); "tipican procenat promasaja".
-    * ``oof_mediana_ae``    – medijalna apsolutna greska u stanovnicima.
     * ``oof_wmape``         – sum|pred-true| / sum(true); agregatna relativna
-      greska ponderisana populacijom (robusna zamena za MAE kao headline).
-    * ``oof_bias``          – sum(pred) / sum(true) na celom skupu; < 1 znaci
-      sistematsko potcenjivanje ukupne populacije.
-    * ``oof_kalib_nagib``   – nagib regresije log1p(true) ~ log1p(pred);
-      > 1 znaci kompresiju predikcija ka sredini (kandidat za post-hoc
-      kalibraciju).
-    * ``oof_opstina_r2_bez_top2`` / ``..._log_bez_top2`` – agregacija po
-      opstini bez dve najvece opstine (Beograd, Novi Sad); razdvaja
-      "model ne radi" od "megagradovi su neekstrapolabilni u GroupKFold-u".
-    * ``oof_medape_<strat>``, ``oof_mae_<strat>``, ``oof_n_<strat>`` – po
-      velicinskim stratumima ``do_500``, ``500_5k``, ``5k_50k``, ``50k_plus``
-      (granice po stvarnoj populaciji); pokazuju gde model radi a gde ne.
+      greska ponderisana populacijom.
+    * ``oof_bias``          – sum(pred) / sum(true); < 1 znaci sistematsko
+      potcenjivanje ukupne populacije.
 
-    Napomena: linearni ``oof_opstina_r2`` se i dalje loguje radi kontinuiteta,
-    ali na rasponu opstina 5k–1.6M tu metriku ili nose ili ruse dva grada —
-    ne koristiti je kao glavnu; glavne su ``oof_r2_log``, ``oof_medape``,
-    ``oof_wmape`` i ``oof_bias``.
+    Dijagnostika i kontekst:
+
+    * ``oof_kalib_nagib``   – nagib regresije log1p(true) ~ log1p(pred);
+      > 1 znaci kompresiju predikcija ka sredini. Ispravlja se post-hoc
+      kalibracijom u fuzionom notebooku.
+    * ``oof_mediana_ae`` / ``oof_mae_stanovnici`` – tipicna i prosecna greska
+      u stanovnicima; prva je robusna, druga je tu radi tumacenja reda velicine.
+    * ``oof_opstina_r2_log`` / ``..._log_bez_top2`` – agregacija po opstini,
+      sa i bez dve najvece (Beograd, Novi Sad); razdvaja "model ne radi" od
+      "megagradovi su neekstrapolabilni u GroupKFold-u".
+    * ``oof_medape_<strat>`` – po velicinskim stratumima ``do_500``,
+      ``500_5k``, ``5k_50k``, ``50k_plus``; pokazuje gde model radi a gde ne.
+
+    Namerno se NE racunaju: ``oof_rmse_log`` (determinisana funkcija
+    ``oof_r2_log`` jer je varijansa ista za sve pristupe), ``oof_mae_log``
+    (log jedinice se ne tumace), ``oof_rmse_stanovnici`` (kvadrat greske u
+    stanovnicima ga svodi na Beograd), linearni ``oof_opstina_r2`` sa i bez
+    top-2 (na rasponu opstina 5k-1.6M ga nose ili ruse dva grada), te
+    ``oof_n_<strat>`` i ``oof_mae_<strat>`` (prvo je opis skupa a ne rezultat
+    runa, drugo samo ponavlja da velika naselja imaju velike apsolutne greske).
 
     Args:
         stvarno:   stvarni broj stanovnika, 1D array.
@@ -113,12 +119,8 @@ def oof_metrics(
 
     m = {
         "oof_r2_log":          float(r2_score(ylog, plog)),
-        "oof_mae_log":         float(mean_absolute_error(ylog, plog)),
-        "oof_rmse_log":        float(mean_squared_error(ylog, plog) ** 0.5),
         "oof_mae_stanovnici":  float(mean_absolute_error(stvarno, oof_pred)),
-        "oof_rmse_stanovnici": float(mean_squared_error(stvarno, oof_pred) ** 0.5),
         "oof_mediana_ae":      float(np.median(abs_gres)),
-        "oof_opstina_r2":      float(r2_score(po_grupi.stvarno, po_grupi.pred)),
         "oof_opstina_r2_log":  float(
             r2_score(np.log1p(po_grupi.stvarno), np.log1p(po_grupi.pred))
         ),
@@ -141,30 +143,81 @@ def oof_metrics(
     # opstina agregacija bez dve najvece opstine (po stvarnoj populaciji)
     if len(po_grupi) > 4:
         bez_top2 = po_grupi.drop(po_grupi.stvarno.nlargest(2).index)
-        m["oof_opstina_r2_bez_top2"] = float(
-            r2_score(bez_top2.stvarno, bez_top2.pred)
-        )
         m["oof_opstina_r2_log_bez_top2"] = float(
             r2_score(np.log1p(bez_top2.stvarno), np.log1p(bez_top2.pred))
         )
 
-    # metrike po velicinskim stratumima (granice po stvarnoj populaciji)
+    # relativna greska po velicinskim stratumima (granice po stvarnoj populaciji);
+    # broj naselja po stratumu je opis skupa a ne rezultat runa — vidi se na
+    # cv_summary_figure iznad stubica
     for lo, hi, oznaka in zip(
         STRATUM_GRANICE[:-1], STRATUM_GRANICE[1:], STRATUM_OZNAKE
     ):
-        u_bin = (stvarno >= lo) & (stvarno < hi)
-        n = int(u_bin.sum())
-        if n == 0:
-            continue
-        m[f"oof_n_{oznaka}"]   = n
-        m[f"oof_mae_{oznaka}"] = float(abs_gres[u_bin].mean())
-        bin_poz = u_bin & poz
+        bin_poz = (stvarno >= lo) & (stvarno < hi) & poz
         if bin_poz.any():
             m[f"oof_medape_{oznaka}"] = float(
                 np.median(abs_gres[bin_poz] / stvarno[bin_poz])
             )
 
     return {k: v for k, v in m.items() if np.isfinite(v)}
+
+
+def kalibracija_figure(
+    stvarno: np.ndarray,
+    df: pd.DataFrame,
+    pristupi: list[str],
+    kalibrisani: dict,
+) -> plt.Figure:
+    """Efekat post-hoc kalibracije po pristupu, dva panela.
+
+    * Levo:  ``oof_kalib_nagib`` po pristupu, sirovo vs kalibrisano. Linija na
+      1.0 je cilj; nagib > 1 znaci da su predikcije stisnute ka sredini.
+    * Desno: ``oof_medape`` po pristupu, isto grupisanje — da li ispravljanje
+      skale zaista smanjuje tipicnu gresku ili samo pomera nagib.
+
+    Args:
+        stvarno:     stvarni broj stanovnika, 1D array.
+        df:          DataFrame sa ``pred_<pristup>`` kolonama (sirove OOF
+                     predikcije) i ``group_col``.
+        pristupi:    lista imena pristupa.
+        kalibrisani: ``{(pristup, metod): oof_pred}`` iz kalibracione petlje.
+
+    Returns:
+        ``matplotlib.figure.Figure``.
+    """
+    metodi = sorted({m for _, m in kalibrisani})
+    serije = ["sirovo", *metodi]
+
+    def metrika(kljuc: str) -> dict:
+        out = {s: [] for s in serije}
+        for ime in pristupi:
+            m = oof_metrics(stvarno, df[f"pred_{ime}"].values, df)
+            out["sirovo"].append(m.get(kljuc, np.nan))
+            for md in metodi:
+                mk = oof_metrics(stvarno, kalibrisani[(ime, md)], df)
+                out[md].append(mk.get(kljuc, np.nan))
+        return out
+
+    fig, ax = plt.subplots(1, 2, figsize=(13, 5))
+    x = np.arange(len(pristupi))
+    sirina = 0.8 / len(serije)
+
+    for os_, kljuc, naslov, cilj in (
+        (ax[0], "oof_kalib_nagib", "Kalibracioni nagib (log-log)", 1.0),
+        (ax[1], "oof_medape", "medAPE (medijalna procentualna greska)", None),
+    ):
+        vred = metrika(kljuc)
+        for i, s in enumerate(serije):
+            os_.bar(x + i * sirina - 0.4 + sirina / 2, vred[s], sirina, label=s)
+        if cilj is not None:
+            os_.axhline(cilj, color="red", ls="--", lw=1, label="cilj = 1.0")
+        os_.set_xticks(x)
+        os_.set_xticklabels(pristupi, rotation=20, ha="right")
+        os_.set_title(naslov)
+        os_.legend(fontsize=9)
+
+    plt.tight_layout()
+    return fig
 
 
 def cv_summary_figure(
@@ -183,7 +236,8 @@ def cv_summary_figure(
     * Gore levo:  bar grafik best val R2 po foldu sa prosecnom linijom.
     * Gore desno: tekstualni rezime metrika.
     * Dole levo:  scatter stvarno vs predvidjeno po naselju (log skala).
-    * Dole desno: scatter stvarno vs predvidjeno agregirano po opstini.
+    * Dole desno: medAPE po velicinskim stratumima, sa brojem naselja po
+      stratumu iznad stubica.
 
     Args:
         fold_r2:   lista best val R2 po foldu.
@@ -199,11 +253,7 @@ def cv_summary_figure(
         ``matplotlib.figure.Figure`` – proslediti ``mlflow.log_figure``.
     """
     oof_pred = np.clip(oof_pred, 0, None)
-    po_grupi = (
-        df.assign(pred=oof_pred, stvarno=stvarno)
-        .groupby(group_col)[["pred", "stvarno"]]
-        .sum()
-    )
+    stvarno = np.asarray(stvarno, dtype="float64")
 
     fig, ax = plt.subplots(2, 2, figsize=(12, 9))
 
@@ -247,15 +297,31 @@ def cv_summary_figure(
     ax[1, 0].set_xlabel("stvarno")
     ax[1, 0].set_ylabel("predvidjeno")
 
-    # Scatter po opstini (agregacija)
-    mm = max(float(po_grupi.stvarno.max()), float(po_grupi.pred.max()), 1.0)
-    ax[1, 1].scatter(po_grupi.stvarno, po_grupi.pred, s=35)
-    ax[1, 1].plot([1, mm], [1, mm], "r--")
-    ax[1, 1].set_title(
-        f"OOF agregacija po {group_col} (R2 {agg['oof_opstina_r2']:.2f})"
-    )
-    ax[1, 1].set_xlabel("stvarno")
-    ax[1, 1].set_ylabel("predvidjeno")
+    # medAPE po velicinskim stratumima: gde model radi a gde ne.
+    # Agregacija po opstini je vec u tekstualnom panelu (dva broja, sa i bez
+    # top-2); ovde je korisniji raspored greske po velicini naselja, jer je
+    # raspodela toliko iskosena da jedan prosek nista ne kaze.
+    oznake, vrednosti, brojevi = [], [], []
+    for lo, hi, oznaka in zip(
+        STRATUM_GRANICE[:-1], STRATUM_GRANICE[1:], STRATUM_OZNAKE
+    ):
+        kljuc = f"oof_medape_{oznaka}"
+        if kljuc not in agg:
+            continue
+        oznake.append(oznaka)
+        vrednosti.append(agg[kljuc])
+        brojevi.append(int(((stvarno >= lo) & (stvarno < hi)).sum()))
+
+    if oznake:
+        stubici = ax[1, 1].bar(range(len(oznake)), vrednosti, color="tab:orange")
+        for s, n in zip(stubici, brojevi):
+            ax[1, 1].text(s.get_x() + s.get_width() / 2, s.get_height(),
+                          f"n={n}", ha="center", va="bottom", fontsize=9)
+        ax[1, 1].set_xticks(range(len(oznake)))
+        ax[1, 1].set_xticklabels(oznake)
+        ax[1, 1].set_ylim(0, max(vrednosti) * 1.18)
+    ax[1, 1].set_title("medAPE po velicini naselja (stanovnika)")
+    ax[1, 1].set_ylabel("medijalna relativna greska")
 
     plt.tight_layout()
     return fig

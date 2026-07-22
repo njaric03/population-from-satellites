@@ -15,7 +15,7 @@ Upotreba u notebucima (paket je u korenu repoa, koren se dodaje na sys.path)::
 """
 from .data        import NW, Naselja, napravi_loadere, seed_worker, stats_po_opsegu
 from .train       import dvofazni_trening, prodji, seed_everything
-from .cv          import cv_summary_figure, napravi_foldove, oof_metrics
+from .cv          import cv_summary_figure, kalibracija_figure, napravi_foldove, oof_metrics
 from .environment import NA_DATABRICKSU, izlazni_dir, podesi_mlflow, sacuvaj_oof
 
 __all__ = [
@@ -31,6 +31,7 @@ __all__ = [
     "seed_everything",
     # cv
     "cv_summary_figure",
+    "kalibracija_figure",
     "napravi_foldove",
     "oof_metrics",
     # environment
