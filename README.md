@@ -64,7 +64,7 @@ scripts/               priprema podataka (lokalno; paket, pokrece se sa -m)
   footprint/           otisci zgrada: strukturirani atributi (pristup 2),
                        rasterizacija (2b), coverage provera
 results/               terminalne tabele i sazeci (.csv, .json)
-figures/               terminalne slike (.png)
+figures/               terminalne slike (.png); popunjava se pokretanjem 01_eda
 data/                  nije u repozitorijumu (preveliko; prenosi se na Databricks UC Volume)
 requirements.txt       zavisnosti za lokalni rad
 ```
