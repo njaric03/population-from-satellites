@@ -3,10 +3,10 @@ petlja po okrugu (memorija niska).
 
 Po naselju se racuna 11 atributa u tri grupe, SVI iz geometrije:
 
-* kolicina  – broj zgrada, ukupna krovna povrsina
-* oblik     – prosecna, medijalna, p90 i rasipanje povrsine zgrade, kompaktnost
+* kolicina  - broj zgrada, ukupna krovna povrsina
+* oblik     - prosecna, medijalna, p90 i rasipanje povrsine zgrade, kompaktnost
               (4*pi*A/O^2), udeo zgrada preko 200 m2
-* raspored  – rastojanje do najblize zgrade i broj suseda u 50 m; razdvaja
+* raspored  - rastojanje do najblize zgrade i broj suseda u 50 m; razdvaja
               zbijeno selo od rastrkanog sa istim brojem zgrada, sto sam broj
               zgrada ne vidi
 
@@ -88,9 +88,7 @@ for k in okruzi:
     except Exception as ex:
         print(f"okrug {int(k)}: ERR {str(ex)[:60]}")
 
-ATRIBUTI = ["n_buildings", "roof_area_m2", "mean_bsize", "median_bsize", "std_bsize",
-            "p90_bsize", "mean_compact", "udeo_velikih", "mean_nn_dist",
-            "median_nn_dist", "mean_n_50m"]
+ATRIBUTI = config.FP_AGREGIRANI      # shema je u configu, jedini izvor istine
 
 fps = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(
     columns=["naselje_maticni_broj", *ATRIBUTI])

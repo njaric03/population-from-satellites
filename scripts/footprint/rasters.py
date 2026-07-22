@@ -55,10 +55,10 @@ for k in sorted(tab.okrug_sifra.dropna().unique()):
         cand = b.iloc[list(sidx.query(wbox, predicate="intersects"))]
         tr = from_origin(west, north, RES, RES)
         if len(cand):
-            # kanal 1: pokrivenost — udeo celije pod zgradom
+            # kanal 1: pokrivenost - udeo celije pod zgradom
             cov = rasterize(((g, 1.0) for g in cand.geometry), out_shape=(FPX, FPX),
                             transform=tr, fill=0, all_touched=False, dtype="float32")
-            # kanal 2: gustina zgrada — broj centroida po celiji. Razdvaja mnogo malih
+            # kanal 2: gustina zgrada - broj centroida po celiji. Razdvaja mnogo malih
             # zgrada od nekoliko velikih, sto pokrivenost sama ne vidi.
             cnt = rasterize(((g, 1.0) for g in cand["centroid"]), out_shape=(FPX, FPX),
                             transform=tr, fill=0, merge_alg=MergeAlg.add, dtype="float32")

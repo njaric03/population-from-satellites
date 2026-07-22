@@ -5,7 +5,7 @@ Napomene:
 
 * ``prodji`` radi za cutout i footprint pristupe (jedan (x, y) par po uzorku).
   tiles_train ima sopstveni ``prodji`` sa scatter_add agregacionom loss-om koji
-  ne moze biti opsten – ostaviti ga lokalno u notebooku.
+  ne moze biti opsten - ostaviti ga lokalno u notebooku.
 * ``dvofazni_trening`` je identicno u svim trima notebucima: zamrznut backbone
   (faza 1) pa fine-tuning sa CosineAnnealingLR (faza 2). tiles_train prosledjuje
   sopstveni ``epoha`` closure koji interno koristi lokalni ``prodji``.
@@ -47,7 +47,7 @@ def prodji(
     """Jedan prolaz kroz DataLoader (trening ili evaluacija).
 
     Za cutout i footprint pristupe koji vracaju ``(x, y)`` parove.
-    **Ne koristiti** za tiles_train – tamo je ``prodji`` lokalno definisan
+    **Ne koristiti** za tiles_train - tamo je ``prodji`` lokalno definisan
     sa scatter_add agregacionom loss-om.
 
     Args:
@@ -55,18 +55,18 @@ def prodji(
         loader:    DataLoader koji vraca ``(x, y)`` parove.
         treniraj:  ``True`` = trening mod, ``False`` = evaluacija.
         loss_fn:   kriterijum gubitka (npr. ``nn.HuberLoss()``).
-        optim:     optimizer – obavezan kada ``treniraj=True``.
+        optim:     optimizer - obavezan kada ``treniraj=True``.
         scaler:    ``torch.amp.GradScaler`` ili ``None``; ako je ``None``
                    koristi se obicni ``.backward()``.
         use_amp:   aktivira ``torch.autocast``.
         amp_dtype: ``torch.float16`` ili ``torch.bfloat16``
                    (``None`` = default autocast dtype). bf16 (A10) ne zahteva
                    GradScaler pa prosledjivati ``scaler=None`` tada.
-        freeze_bn: drzati BatchNorm u eval modu – za fazu 1 ucenja samo glave.
+        freeze_bn: drzati BatchNorm u eval modu - za fazu 1 ucenja samo glave.
         device:    uredjaj na koji se podaci salju (``"cuda"`` ili ``"cpu"``).
 
     Returns:
-        ``(avg_loss, predictions, targets)`` – predictions i targets su 1D
+        ``(avg_loss, predictions, targets)`` - predictions i targets su 1D
         numpy float32 nizovi poravnati sa redosledom loadera.
     """
     net.train(treniraj)
@@ -116,10 +116,10 @@ def dvofazni_trening(
 ) -> tuple[float, dict]:
     """Dvofazni trening koji je identican u svim notebucima.
 
-    * **Faza 1** – zamrznut backbone (BN u eval), uci se samo glava
+    * **Faza 1** - zamrznut backbone (BN u eval), uci se samo glava
       (parametri ciji naziv pocinje sa ``head_prefix``) ``epochs_head``
       epoha sa AdamW i ``head_lr``.
-    * **Faza 2** – odmrznut ceo model, fine-tuning sa CosineAnnealingLR
+    * **Faza 2** - odmrznut ceo model, fine-tuning sa CosineAnnealingLR
       i ``finetune_lr``. Cuva se best checkpoint po val R2.
 
     Args:
@@ -138,7 +138,7 @@ def dvofazni_trening(
                          ``"head"`` za multimodalni model sa sopstvenom glavom.
 
     Returns:
-        ``(best_val_r2, best_state_dict)`` – best_state_dict je recnik tezina
+        ``(best_val_r2, best_state_dict)`` - best_state_dict je recnik tezina
         (CPU kopija) koji treba ucitati nazad u model pre OOF predikcije.
     """
     best_r2, best_state = -1e9, None

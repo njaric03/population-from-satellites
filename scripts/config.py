@@ -7,13 +7,13 @@ umesto da svaka sklapa svoje putanje. Pokrecu se iz korena repoa kao moduli::
 
 Podela direktorijuma:
 
-* ``DATA``    – ulazi i medjukoraci; sve sto neki sledeci korak cita kao ulaz.
+* ``DATA``    - ulazi i medjukoraci; sve sto neki sledeci korak cita kao ulaz.
                 Van gita (preveliko), deli se kao zip preko Drive-a.
-* ``RESULTS`` – terminalne tabele i sazeci (.csv, .json); u gitu.
-* ``FIGURES`` – terminalne slike (.png); u gitu.
+* ``RESULTS`` - terminalne tabele i sazeci (.csv, .json); u gitu.
+* ``FIGURES`` - terminalne slike (.png); u gitu.
 
 Terminalno = niko dalje to ne konzumira kao ulaz, nego se gleda ili predaje.
-Tezine modela i OOF predikcije ne idu ni u jedno od ovoga — one nastaju u
+Tezine modela i OOF predikcije ne idu ni u jedno od ovoga - one nastaju u
 notebocima i idu u ``out/`` i uz MLflow run (videti ``core.environment``).
 """
 import os
@@ -58,3 +58,33 @@ def obezbedi(*putanje: str) -> None:
     """Napravi direktorijume ako ne postoje."""
     for p in putanje:
         os.makedirs(p, exist_ok=True)
+
+
+# --- shema strukturiranih atributa otisaka (pristup 2) ---------------------
+# Jedini izvor istine: footprint/per_naselje ih racuna, 03_footprint_train i
+# 04_multimodal_train ih citaju. Svi su izvedeni iz geometrije; Overture opisne
+# kolone se ne koriste (num_floors 1.17%, height 0.04%, subtype/class ~10.8%,
+# i to neravnomerno po okruzima, pa mere gustinu mapiranja a ne izgradjenost).
+
+# racuna ih per_naselje agregacijom po naselju
+FP_AGREGIRANI = [
+    "n_buildings", "roof_area_m2",                       # kolicina
+    "mean_bsize", "median_bsize", "std_bsize", "p90_bsize",
+    "mean_compact", "udeo_velikih",                      # oblik
+    "mean_nn_dist", "median_nn_dist", "mean_n_50m",      # raspored
+]
+
+# izvedeni iz agregiranih i povrsine naselja (GeoSrbija geometrija)
+FP_IZVEDENI = ["building_density", "built_fraction"]
+
+# tezak rep pa idu kroz log1p pre standardizacije
+FP_LOG = [
+    "n_buildings", "roof_area_m2", "mean_bsize", "median_bsize", "std_bsize",
+    "p90_bsize", "mean_nn_dist", "median_nn_dist", "mean_n_50m",
+    "building_density", "area_km2",
+]
+# ogranicene velicine (udeo, kompaktnost), ostaju kakve jesu
+FP_LIN = ["mean_compact", "udeo_velikih", "built_fraction"]
+
+# ulaz modela: 14 atributa
+FP_ATRIBUTI = FP_LOG + FP_LIN

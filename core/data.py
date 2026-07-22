@@ -27,11 +27,11 @@ def stats_po_opsegu(paths: list[str]) -> tuple[np.ndarray, np.ndarray]:
 
     Args:
         paths: lista putanja ka .npy fajlovima (cutout-i ili otisci zgrada ili
-               plocice – bilo koja lista; tiles_train prosledjuje uniju svih
+               plocice - bilo koja lista; tiles_train prosledjuje uniju svih
                putanja plocica trening naselja tekuceg folda).
 
     Returns:
-        mean, std – oba oblika (1, C, 1, 1), dtype float32.
+        mean, std - oba oblika (1, C, 1, 1), dtype float32.
     """
     uzorak = np.stack(
         [np.load(p) for p in random.sample(paths, min(400, len(paths)))]
@@ -46,8 +46,8 @@ class Naselja(Dataset):
 
     ``frame`` mora imati kolone:
 
-    * ``path``  – apsolutna putanja ka .npy fajlu
-    * ``y``     – float32 ciljna velicina (npr. ``log1p(pop)``)
+    * ``path``  - apsolutna putanja ka .npy fajlu
+    * ``y``     - float32 ciljna velicina (npr. ``log1p(pop)``)
     """
 
     def __init__(
@@ -84,7 +84,7 @@ def seed_worker(wid: int, seed: int = 42) -> None:
     """Inicijalizator radnika DataLoader-a za reproduktivnost.
 
     Prosledjuje se kao ``worker_init_fn`` u DataLoader.
-    Beleska: da bismo preneli seed, bice kreiran closure – videti
+    Beleska: da bismo preneli seed, bice kreiran closure - videti
     ``napravi_loadere`` za primer.
     """
     s = seed + wid

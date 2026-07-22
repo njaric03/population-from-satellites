@@ -63,7 +63,7 @@ print("source tally top:", df.top_source.value_counts().to_dict())
 
 # === popunjenost Overture atributa po okrugu ===
 # Razlog zasto per_naselje racuna atribute iskljucivo iz geometrije: opisni atributi
-# su retki i, sto je gore, neravnomerno popunjeni — gusce mapirani okruzi su i
+# su retki i, sto je gore, neravnomerno popunjeni - gusce mapirani okruzi su i
 # urbaniji, pa bi popunjenost bila proksi za urbanost a ne za izgradjenost.
 import glob
 

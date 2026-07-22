@@ -7,7 +7,7 @@ Notebuci rade nepromenjeni u oba okruzenja:
 * Databricks (primarno): workspace MLflow tracking (podrazumevan), izlaz na
   UC Volume.
 * Lokalno: izlaz u ``out/``; metrike u lokalni ``mlruns/`` file store, osim
-  ako su ``DATABRICKS_HOST`` i ``DATABRICKS_TOKEN`` u okruzenju — tada idu u
+  ako su ``DATABRICKS_HOST`` i ``DATABRICKS_TOKEN`` u okruzenju - tada idu u
   isti Databricks eksperiment preko REST API-ja.
 """
 from __future__ import annotations

@@ -1,8 +1,9 @@
 """
-GroupKFold CV podela, OOF metrike i CV rezime grafik.
+GroupKFold CV podela, OOF metrike, rezime i grafici.
 
-Sve tri funkcije su identicne u svim trima notebucima – jedine razlike su
-iznosi run_name stringa i put do .pt fajla, koji ostaju lokalni.
+Sve sto je zajednicko evaluaciji svih pristupa zivi ovde, pa su rezultati
+direktno uporedivi: ista podela po opstinama, isti skup metrika, isti grafik.
+Notebooci drze samo ono sto je specificno za svoj model.
 """
 from __future__ import annotations
 
@@ -40,10 +41,15 @@ def napravi_foldove(
         )
         for tr, va in gkf.split(df, groups=df[group_col])
     ]
-    for t, v in folds:
-        assert not (
-            set(t[group_col]) & set(v[group_col])
-        ), "curenje opstine izmedju train i val!"
+    for i, (t, v) in enumerate(folds):
+        preklop = set(t[group_col]) & set(v[group_col])
+        if preklop:
+            # raise a ne assert: ovo je glavna garancija protiv prostornog
+            # curenja i ne sme da nestane pod `python -O`
+            raise ValueError(
+                f"curenje izmedju train i val u foldu {i}: "
+                f"{len(preklop)} zajednickih vrednosti '{group_col}'"
+            )
     return folds
 
 
@@ -58,31 +64,31 @@ def oof_metrics(
     df: pd.DataFrame,
     group_col: str = "opstina_maticni_broj",
 ) -> dict:
-    """Standardni skup OOF metrika — 13 kljuceva, bez redundantnih.
+    """Standardni skup OOF metrika - 13 kljuceva, bez redundantnih.
 
     Raspodela populacije je jako iskosena (medijana naselja ~265, maksimum
     ~260k), pa prosecne apsolutne greske i linearni R2 na sumama dominiraju
     najveci gradovi. Zato su glavne metrike relativne:
 
-    * ``oof_r2_log``        – R2 u log1p prostoru; glavni pokazatelj uklapanja.
-    * ``oof_medape``        – medijalna apsolutna procentualna greska
+    * ``oof_r2_log``        - R2 u log1p prostoru; glavni pokazatelj uklapanja.
+    * ``oof_medape``        - medijalna apsolutna procentualna greska
       (samo naselja sa pop > 0); "tipican procenat promasaja".
-    * ``oof_wmape``         – sum|pred-true| / sum(true); agregatna relativna
+    * ``oof_wmape``         - sum|pred-true| / sum(true); agregatna relativna
       greska ponderisana populacijom.
-    * ``oof_bias``          – sum(pred) / sum(true); < 1 znaci sistematsko
+    * ``oof_bias``          - sum(pred) / sum(true); < 1 znaci sistematsko
       potcenjivanje ukupne populacije.
 
     Dijagnostika i kontekst:
 
-    * ``oof_kalib_nagib``   – nagib regresije log1p(true) ~ log1p(pred);
+    * ``oof_kalib_nagib``   - nagib regresije log1p(true) ~ log1p(pred);
       > 1 znaci kompresiju predikcija ka sredini. Ispravlja se post-hoc
       kalibracijom u fuzionom notebooku.
-    * ``oof_mediana_ae`` / ``oof_mae_stanovnici`` – tipicna i prosecna greska
+    * ``oof_mediana_ae`` / ``oof_mae_stanovnici`` - tipicna i prosecna greska
       u stanovnicima; prva je robusna, druga je tu radi tumacenja reda velicine.
-    * ``oof_opstina_r2_log`` / ``..._log_bez_top2`` – agregacija po opstini,
+    * ``oof_opstina_r2_log`` / ``..._log_bez_top2`` - agregacija po opstini,
       sa i bez dve najvece (Beograd, Novi Sad); razdvaja "model ne radi" od
       "megagradovi su neekstrapolabilni u GroupKFold-u".
-    * ``oof_medape_<strat>`` – po velicinskim stratumima ``do_500``,
+    * ``oof_medape_<strat>`` - po velicinskim stratumima ``do_500``,
       ``500_5k``, ``5k_50k``, ``50k_plus``; pokazuje gde model radi a gde ne.
 
     Namerno se NE racunaju: ``oof_rmse_log`` (determinisana funkcija
@@ -148,7 +154,7 @@ def oof_metrics(
         )
 
     # relativna greska po velicinskim stratumima (granice po stvarnoj populaciji);
-    # broj naselja po stratumu je opis skupa a ne rezultat runa — vidi se na
+    # broj naselja po stratumu je opis skupa a ne rezultat runa - vidi se na
     # cv_summary_figure iznad stubica
     for lo, hi, oznaka in zip(
         STRATUM_GRANICE[:-1], STRATUM_GRANICE[1:], STRATUM_OZNAKE
@@ -162,6 +168,47 @@ def oof_metrics(
     return {k: v for k, v in m.items() if np.isfinite(v)}
 
 
+# Kolone za tabele poredjenja izmedju pristupa; podskup oof_metrics kljuceva
+# koji staje u sirinu ekrana i pokriva uklapanje, relativnu gresku i pristrasnost.
+GLAVNE_KOLONE = [
+    "cv_mean_val_r2", "oof_r2_log", "oof_medape", "oof_wmape", "oof_bias",
+    "oof_kalib_nagib", "oof_opstina_r2_log", "oof_opstina_r2_log_bez_top2",
+]
+
+
+def metrike_runa(
+    fold_r2: list[float],
+    stvarno: np.ndarray,
+    oof_pred: np.ndarray,
+    df: pd.DataFrame,
+    group_col: str = "opstina_maticni_broj",
+) -> dict:
+    """Po-fold CV R2 (prosek i rasipanje) plus pun skup OOF metrika.
+
+    Isti recnik se u svakom treniracom notebooku salje u ``mlflow.log_metrics``
+    i u ``cv_summary_figure``.
+    """
+    return {
+        "cv_mean_val_r2": float(np.mean(fold_r2)),
+        "cv_std_val_r2":  float(np.std(fold_r2)),
+        **oof_metrics(stvarno, oof_pred, df, group_col),
+    }
+
+
+def rezime_linija(agg: dict, label: str) -> str:
+    """Jednolinijski rezime runa za ispis na kraju notebooka."""
+    def _f(kljuc: str, fmt: str = ".2f") -> str:
+        return format(agg[kljuc], fmt) if kljuc in agg else "n/a"
+
+    return (
+        f"[{label}] CV R2 {agg['cv_mean_val_r2']:.3f} ± {agg['cv_std_val_r2']:.3f}"
+        f" | OOF R2(log) {agg['oof_r2_log']:.3f}"
+        f" | medAPE {_f('oof_medape')} | wMAPE {_f('oof_wmape')}"
+        f" | bias {_f('oof_bias')}"
+        f" | opstina R2(log, bez top2) {_f('oof_opstina_r2_log_bez_top2', '.3f')}"
+    )
+
+
 def kalibracija_figure(
     stvarno: np.ndarray,
     df: pd.DataFrame,
@@ -172,7 +219,7 @@ def kalibracija_figure(
 
     * Levo:  ``oof_kalib_nagib`` po pristupu, sirovo vs kalibrisano. Linija na
       1.0 je cilj; nagib > 1 znaci da su predikcije stisnute ka sredini.
-    * Desno: ``oof_medape`` po pristupu, isto grupisanje — da li ispravljanje
+    * Desno: ``oof_medape`` po pristupu, isto grupisanje - da li ispravljanje
       skale zaista smanjuje tipicnu gresku ili samo pomera nagib.
 
     Args:
@@ -188,15 +235,13 @@ def kalibracija_figure(
     metodi = sorted({m for _, m in kalibrisani})
     serije = ["sirovo", *metodi]
 
-    def metrika(kljuc: str) -> dict:
-        out = {s: [] for s in serije}
-        for ime in pristupi:
-            m = oof_metrics(stvarno, df[f"pred_{ime}"].values, df)
-            out["sirovo"].append(m.get(kljuc, np.nan))
-            for md in metodi:
-                mk = oof_metrics(stvarno, kalibrisani[(ime, md)], df)
-                out[md].append(mk.get(kljuc, np.nan))
-        return out
+    # oof_metrics jednom po (pristup, serija); ranije se zvao po metrici pa se
+    # isti racun ponavljao za svaki panel
+    izmereno = {}
+    for ime in pristupi:
+        izmereno[(ime, "sirovo")] = oof_metrics(stvarno, df[f"pred_{ime}"].values, df)
+        for md in metodi:
+            izmereno[(ime, md)] = oof_metrics(stvarno, kalibrisani[(ime, md)], df)
 
     fig, ax = plt.subplots(1, 2, figsize=(13, 5))
     x = np.arange(len(pristupi))
@@ -206,9 +251,9 @@ def kalibracija_figure(
         (ax[0], "oof_kalib_nagib", "Kalibracioni nagib (log-log)", 1.0),
         (ax[1], "oof_medape", "medAPE (medijalna procentualna greska)", None),
     ):
-        vred = metrika(kljuc)
         for i, s in enumerate(serije):
-            os_.bar(x + i * sirina - 0.4 + sirina / 2, vred[s], sirina, label=s)
+            vred = [izmereno[(ime, s)].get(kljuc, np.nan) for ime in pristupi]
+            os_.bar(x + i * sirina - 0.4 + sirina / 2, vred, sirina, label=s)
         if cilj is not None:
             os_.axhline(cilj, color="red", ls="--", lw=1, label="cilj = 1.0")
         os_.set_xticks(x)
@@ -250,7 +295,7 @@ def cv_summary_figure(
                    ``"tiles"``, ``"sentinel"``).
 
     Returns:
-        ``matplotlib.figure.Figure`` – proslediti ``mlflow.log_figure``.
+        ``matplotlib.figure.Figure`` - proslediti ``mlflow.log_figure``.
     """
     oof_pred = np.clip(oof_pred, 0, None)
     stvarno = np.asarray(stvarno, dtype="float64")
