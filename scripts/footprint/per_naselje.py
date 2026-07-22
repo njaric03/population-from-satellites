@@ -11,9 +11,10 @@ Po naselju se racuna 11 atributa u tri grupe, SVI iz geometrije:
               zgrada ne vidi
 
 Namerno se NE koriste Overture atributi (num_floors, height, subtype, class):
-mereno nad kesiranim okruzima, num_floors je popunjen u 1.17% zgrada, height u
-0.04%, subtype/class u ~10.8%. Popunjenost je pritom neravnomerna po okruzima
-(2.89% za num_floors u okrugu 0 naspram 0.04-0.20% drugde), pa bi model iz njih
+mereno nad svih 25 kesiranih okruga (9.1M zapisa), num_floors je popunjen u
+0.76% zgrada, height u 0.05%, subtype/class u ~8.1%. Popunjenost je izrazito
+neravnomerna: okrug 0 ima 2.89% za num_floors i 24.35% za subtype, ostali red
+velicine manje. Zato bi model iz njih
 ucio gustinu mapiranja kao proksi za urbanost umesto stvarne izgradjenosti.
 Udeo zgrada preko 200 m2 hvata deo istog signala (stambeni blokovi su veliki)
 ali iz geometrije, sa punom pokrivenoscu. Videti footprint/coverage.py.

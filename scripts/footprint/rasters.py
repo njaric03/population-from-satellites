@@ -5,8 +5,8 @@ Kanali: [0] pokrivenost (udeo celije pod zgradom, 4x supersample),
         [1] gustina zgrada (broj centroida po celiji).
 
 Oba su izvedena iskljucivo iz geometrije. Raniji kanal [1] je bio pokrivenost x
-spratnost, ali je num_floors popunjen u 1.17% zgrada a height u 0.04% (mereno
-nad kesiranim okruzima, videti footprint/coverage.py), pa je spratnost bila 1
+spratnost, ali je num_floors popunjen u 0.76% zgrada a height u 0.05% (mereno
+nad svih 25 okruga, videti footprint/coverage.py), pa je spratnost bila 1
 za skoro sve zgrade i kanal [1] je ispadao duplikat kanala [0]. Broj centroida
 razdvaja mnogo malih zgrada od nekoliko velikih, sto pokrivenost sama ne vidi.
 

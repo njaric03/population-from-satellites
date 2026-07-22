@@ -63,7 +63,7 @@ def obezbedi(*putanje: str) -> None:
 # --- shema strukturiranih atributa otisaka (pristup 2) ---------------------
 # Jedini izvor istine: footprint/per_naselje ih racuna, 03_footprint_train i
 # 04_multimodal_train ih citaju. Svi su izvedeni iz geometrije; Overture opisne
-# kolone se ne koriste (num_floors 1.17%, height 0.04%, subtype/class ~10.8%,
+# kolone se ne koriste (num_floors 0.76%, height 0.05%, subtype/class ~8.1%,
 # i to neravnomerno po okruzima, pa mere gustinu mapiranja a ne izgradjenost).
 
 # racuna ih per_naselje agregacijom po naselju
