@@ -1,13 +1,14 @@
 """
-Detekcija okruzenja (Databricks / Colab / lokalno), MLflow tracking,
+Detekcija okruzenja (Databricks / lokalno), MLflow tracking,
 izlazni direktorijum i cuvanje OOF predikcija.
 
 Notebuci rade nepromenjeni u oba okruzenja:
 
-* Databricks: workspace MLflow tracking (podrazumevan), izlaz na UC Volume.
-* Colab: ako su postavljeni ``DATABRICKS_HOST`` i ``DATABRICKS_TOKEN``,
-  metrike idu u isti Databricks eksperiment; inace lokalni ``mlruns/``
-  file store. Izlaz ide u ``/content/out``.
+* Databricks (primarno): workspace MLflow tracking (podrazumevan), izlaz na
+  UC Volume.
+* Lokalno: izlaz u ``out/``; metrike u lokalni ``mlruns/`` file store, osim
+  ako su ``DATABRICKS_HOST`` i ``DATABRICKS_TOKEN`` u okruzenju — tada idu u
+  isti Databricks eksperiment preko REST API-ja.
 """
 from __future__ import annotations
 
@@ -16,7 +17,7 @@ import os
 import numpy as np
 import pandas as pd
 
-# Databricks runtime uvek ima /databricks na disku; Colab ima /content.
+# Databricks runtime uvek ima /databricks na disku.
 NA_DATABRICKSU: bool = os.path.isdir("/databricks")
 
 VOLUME_OUT = "/Volumes/katalog/deep_learning/raw_data"
@@ -26,13 +27,11 @@ EXPERIMENT = "/Users/korisnik/procena_stanovnika"
 def izlazni_dir() -> str:
     """Direktorijum za tezine modela i OOF parquet fajlove.
 
-    Databricks: UC Volume. Colab: ``/content/out``. Lokalno: ``out/``.
+    Databricks: UC Volume. Lokalno: ``out/``.
     Kreira direktorijum ako ne postoji.
     """
     if NA_DATABRICKSU:
         out = VOLUME_OUT
-    elif os.path.isdir("/content"):
-        out = "/content/out"
     else:
         out = "out"
     os.makedirs(out, exist_ok=True)

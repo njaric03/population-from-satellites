@@ -1,8 +1,8 @@
 # Zavisnosti projekta. Verzije su one na kojima je projekat pokretan
-# (Databricks ML runtime / Colab u julu 2026); >= a ne ==, jer i Databricks i
-# Colab dolaze sa svojim, novijim buildovima koje nema smisla degradirati.
+# (Databricks ML runtime, jul 2026); >= a ne ==, jer Databricks dolazi sa
+# svojim, novijim buildovima koje nema smisla degradirati.
 #
-# Notebooci na Databricksu/Colabu instaliraju samo ono sto runtime nema
+# Notebooci na Databricksu instaliraju samo ono sto runtime nema
 # (`%pip install -q timm mlflow`); ovaj fajl je za lokalni rad i za evidenciju
 # sta je tacno potrebno.
 #

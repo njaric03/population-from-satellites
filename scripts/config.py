@@ -53,11 +53,6 @@ CUTOUTS_INDEX  = _p("cutouts", "index.csv")
 FOOTPRINT_CUT  = _p("footprint_cutouts")  # rasterizovani otisci (pristup 2)
 TILES          = _p("tiles")             # plocice 2.24 km (pristup 1b)
 
-# --- zip paketi za Colab ---------------------------------------------------
-ZIP_DATA       = os.path.join(KOREN, "data_upload.zip")
-ZIP_FOOTPRINT  = os.path.join(KOREN, "footprint_upload.zip")
-ZIP_TILES      = os.path.join(KOREN, "tiles_upload.zip")
-
 
 def obezbedi(*putanje: str) -> None:
     """Napravi direktorijume ako ne postoje."""

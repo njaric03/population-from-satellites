@@ -40,7 +40,7 @@ core/                  zajednicki modul (uvoze ga svi treniracki notebooci)
   data.py              normalizacija po opsegu, Dataset, DataLoader-i
   train.py             seeding, trening/eval prolaz, dvofazni trening (glava -> fine-tuning)
   cv.py                GroupKFold foldovi, OOF metrike, CV rezime grafik
-  environment.py       detekcija Databricks/Colab, MLflow tracking, izlazni dir, cuvanje OOF-a
+  environment.py       detekcija Databricks/lokalno, MLflow tracking, izlazni dir, cuvanje OOF-a
 notebooks/             Jupyter notebooci; prefiks = redosled pokretanja
   01_eda.ipynb              analiza podataka: jedinice, populacija, footprinti, snimci
   02_sentinel_train.ipynb   pristup 1  (Sentinel CNN, pop i density cilj)
@@ -53,11 +53,10 @@ scripts/               priprema podataka (lokalno; paket, pokrece se sa -m)
   preprocessing/       labele i master tabela naselja — zajednicko svim pristupima
   sentinel/            satelitski ulazi: isecci (pristup 1), plocice (pristup 1b)
   footprint/           otisci zgrada iz Overture i rasterizacija (pristup 2)
-  packaging/           zip paketi za Colab
   diagnostics/         provere kvaliteta podataka, van pipeline-a
 results/               terminalne tabele i sazeci (.csv, .json)
 figures/               terminalne slike (.png)
-data/                  nije u repozitorijumu (preveliko; deli se kao zip preko Drive-a)
+data/                  nije u repozitorijumu (preveliko; prenosi se na Databricks UC Volume)
 requirements.txt       zavisnosti za lokalni rad
 ```
 
@@ -96,9 +95,9 @@ python -m scripts.footprint.per_naselje             # otisci po okrugu iz Overtu
 python -m scripts.sentinel.cutouts subset           # openEO: kompozit po okrugu -> 1 isecak po naselju
 python -m scripts.footprint.rasters                 # otisci -> 2-kanalni rasteri (pristup 2)
 python -m scripts.sentinel.tiles                    # kompoziti -> plocice 2.24 km (pristup 1b)
-python -m scripts.packaging.colab                   # data_upload.zip + footprint_upload.zip
-python -m scripts.packaging.tiles                   # tiles_upload.zip
 ```
+
+Gotov `data/` se onda prenosi na Databricks UC Volume, odakle ga notebooci čitaju.
 
 Zavisnosti (zašto baš taj redosled):
 
@@ -106,16 +105,15 @@ Zavisnosti (zašto baš taj redosled):
 preprocessing.build_labels
   └─> preprocessing.make_dataset_table
         ├─> footprint.per_naselje ─┐
-        │                          ├─> footprint.rasters ─> packaging.colab
+        │                          ├─> footprint.rasters
         └─> sentinel.cutouts ──────┤
-                                   └─> sentinel.tiles ────> packaging.tiles
+                                   └─> sentinel.tiles
 ```
 
 `footprint.per_naselje` i `sentinel.cutouts` mogu paralelno — oba traže samo
 `naselje_table.parquet`. `footprint.rasters` i `sentinel.tiles` oba traže i
 otiske iz Overture i Sentinel izlaz: rasterizacija zato što crta zgrade preko
-isečka, a pločice zato što centroidima zgrada odbacuju prazne. `packaging.*`
-samo pakuje gotovo.
+isečka, a pločice zato što centroidima zgrada odbacuju prazne.
 
 Van pipeline-a, dijagnostika (traži samo `build_labels`, ne ulazi ni u šta):
 
@@ -143,17 +141,18 @@ Terminalno = niko to dalje ne konzumira kao ulaz, nego se gleda ili predaje.
 ## Trening
 
 **Databricks** (primarno): repo je povezan kao Databricks Repo; podaci su
-raspakovani na UC Volume (`.../raw_data/data`). Otvoriti notebook i `Run all` —
+preneti na UC Volume (`.../raw_data/data`). Otvoriti notebook i `Run all` —
 putanje, MLflow tracking i izlazi se podese sami. Redosled za fuziju: prvo
 trenirački notebooki (1/1b/2 i F2 `05_multimodal_train`, koji trenira iz sirovih
 ulaza — svaki snimi `oof_<pristup>.parquet`), pa `06_fusion_train`. `06_fusion_train`
 uzima svaki OOF parquet koji zatekne, pa radi i sa podskupom pristupa.
 
-**Colab** (rezerva): kloniraj repo u `/content` (zbog `core`), uploaduj
-odgovarajući zip u `/content`, pa pokreni ćelije redom. MLflow: ako su postavljeni
-`DATABRICKS_HOST` i `DATABRICKS_TOKEN` (env varijable / Colab Secrets), metrike
-idu u zajednički Databricks eksperiment; bez njih u lokalni `mlruns/`. Težine
-modela i OOF predikcije idu u `/content/out`.
+**Lokalno** (za razvoj i EDA): `pip install -r requirements.txt`, pa
+`jupyter lab`. Bez `/databricks` na disku `core.environment` sam prelazi na
+`out/` za težine i OOF, i na lokalni `mlruns/` za metrike. Ako su postavljeni
+`DATABRICKS_HOST` i `DATABRICKS_TOKEN`, metrike umesto toga idu u zajednički
+Databricks eksperiment. Trening celog skupa lokalno nema smisla bez GPU-a —
+lokalno se pokreće `01_eda` i `06_fusion_train` (fuzija ne traži GPU).
 
 Svaki run se prati kroz MLflow: hiperparametri, metrike po epohi, OOF metrike,
 rezime grafik, težine po foldu i OOF parquet kao artefakti.
