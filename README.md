@@ -48,7 +48,7 @@ notebooks/             Databricks source format (.py) + generisani .ipynb
   footprint_train      pristup 2 (CNN nad otiscima zgrada)
   fusion_train         fuzija F1 (stacking + kalibracija nad OOF predikcijama)
   multimodal_train     fuzija F2 (zajednicki dvogranski model)
-scripts/               priprema podataka (pokrece se lokalno, redom — videti dole)
+scripts/               priprema podataka + dijagnostika (lokalno — videti dole)
 results/               mali artefakti: EDA grafici, sazeci, tabela labela
 data/                  nije u repozitorijumu (preveliko; deli se kao zip preko Drive-a)
 ```
@@ -77,6 +77,17 @@ python scripts/tile_cutouts.py            # plocice (pristup 1b)
 python scripts/package_for_colab.py       # data_upload.zip + footprint_upload.zip
 python scripts/package_tiles.py           # tiles_upload.zip
 ```
+
+Van ovog redosleda, kao dijagnostika:
+
+```
+python scripts/rural_footprints.py        # pokrivenost Overture otiscima u selima
+```
+
+Uzorkuje 6 sela (pop 50–800) i 2 depopulaciona naselja (pop 1–20) i izveštava broj
+zgrada, krovnu površinu i izvore. Provera rizika za pristup 2: ako su ML-generisani
+otisci retki u selima, izgrađenost je nepouzdan signal baš tamo gde je populacija
+najmanja. Rezultat ide u `data/eda/`.
 
 ## Notebooci u .ipynb formatu
 

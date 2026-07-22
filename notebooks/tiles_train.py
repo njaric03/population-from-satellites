@@ -341,3 +341,109 @@ poredjenje = (
 print("\n=== Poredjenje log vs linear (agregaciona loss) ===")
 display(poredjenje)
 
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Post-hoc kalibracija velikih vrednosti (isotonic)
+
+# COMMAND ----------
+
+# DBTITLE 1,Isotonic kalibracija u log1p prostoru (leave-fold-out)
+# === Kalibracija velikih vrednosti: post-hoc isotonic regresija u log1p prostoru ===
+# Monotona kalibraciona kriva log1p(pred) -> log1p(stvarno) ispravlja sistematsku kompresiju
+# predikcija ka sredini (metrika oof_kalib_nagib), a monotonost cuva rang naselja.
+#
+# Za razliku od Ridge kalibracije u fusion_train (nagib+presek, tj. stepena funkcija u prostoru
+# stanovnika), isotonic ne pretpostavlja oblik krive — moze da razvuce samo gornji kraj raspodele.
+#
+# Ulaz su OOF predikcije koje je run(loss_space="log") vec snimio u oof_tiles_log.parquet.
+# Ne rekonstruisemo ih iz .pt checkpointova: napravi_loadere racuna normalizaciju preko
+# stats_po_opsegu, koje uzima nasumican uzorak od 400 plocica, pa bi drugi forward prolaz dao
+# nesto drugaciju normalizaciju i time predikcije koje se ne poklapaju sa prijavljenim metrikama.
+#
+# Leave-fold-out: kriva se za svaki fold fituje samo na naseljima van tog folda (isto GroupKFold
+# pravilo kao svuda), pa kalibrisana predikcija naselja ostaje out-of-fold.
+
+from sklearn.isotonic import IsotonicRegression
+
+
+def kalibrisi_lfo(oof_pred, stvarno_arr, folds, nasel_frame):
+    """Leave-fold-out monotona kalibracija u log1p prostoru (bez curenja)."""
+    mb_to_idx = {mb: i for i, mb in enumerate(nasel_frame.naselje_maticni_broj.values)}
+    kal = oof_pred.astype("float64").copy()
+    for _, val_f in folds:
+        val_idx = np.array([mb_to_idx[mb] for mb in val_f.naselje_maticni_broj.values])
+        train_idx = np.setdiff1d(np.arange(len(oof_pred)), val_idx)
+        iso = IsotonicRegression(out_of_bounds="clip", increasing=True)
+        iso.fit(np.log1p(oof_pred[train_idx]), np.log1p(stvarno_arr[train_idx]))
+        kal[val_idx] = np.expm1(iso.predict(np.log1p(oof_pred[val_idx])))
+    return np.clip(kal, 0, None)
+
+
+KAL_KOLONE = ["oof_r2_log", "oof_kalib_nagib", "oof_medape", "oof_wmape", "oof_bias",
+              "oof_opstina_r2", "oof_opstina_r2_log", "oof_mae_stanovnici", "oof_rmse_stanovnici"]
+
+stvarno = nasel["pop"].values.astype("float32")
+oof_tiles = (
+    pd.read_parquet(f"{OUT_DIR}/oof_tiles_log.parquet")
+    .set_index("naselje_maticni_broj")["pred"]
+)
+oof_pred_log     = oof_tiles.loc[nasel.naselje_maticni_broj.values].values.astype("float32")
+oof_pred_log_kal = kalibrisi_lfo(oof_pred_log, stvarno, FOLDS, nasel)
+
+agg_raw = oof_metrics(stvarno, oof_pred_log, nasel)
+agg_kal = oof_metrics(stvarno, oof_pred_log_kal, nasel)
+
+poredjenje_kal = pd.DataFrame([
+    {"varijanta": "log (bez kalibracije)", **agg_raw},
+    {"varijanta": "log + isotonic kalibracija (leave-fold-out)", **agg_kal},
+]).set_index("varijanta").reindex(columns=KAL_KOLONE)   # reindex: tolerise kljuceve koji fale
+
+fig_kal, ax = plt.subplots(1, 3, figsize=(18, 5))
+m = max(float(stvarno.max()), float(oof_pred_log.max()), float(oof_pred_log_kal.max()), 1.0)
+
+# log-log skala (naglasava relativnu gresku na svim velicinama)
+ax[0].scatter(stvarno, oof_pred_log, s=12, alpha=0.35, label="bez kalibracije")
+ax[0].scatter(stvarno, oof_pred_log_kal, s=12, alpha=0.35, label="kalibrisano")
+ax[0].plot([1, m], [1, m], "r--")
+ax[0].set_xscale("log"); ax[0].set_yscale("log")
+ax[0].set_title("OOF naselje: pre/posle kalibracije (log-log)")
+ax[0].set_xlabel("stvarno"); ax[0].set_ylabel("predvidjeno"); ax[0].legend()
+
+# linearna skala: naglasava apsolutnu gresku kod velikih naselja
+ax[1].scatter(stvarno, oof_pred_log, s=14, alpha=0.4, label="bez kalibracije")
+ax[1].scatter(stvarno, oof_pred_log_kal, s=14, alpha=0.4, label="kalibrisano")
+ax[1].plot([0, m], [0, m], "r--")
+ax[1].set_title("OOF naselje: pre/posle kalibracije (linearna skala)")
+ax[1].set_xlabel("stvarno"); ax[1].set_ylabel("predvidjeno"); ax[1].legend()
+
+po_grupi_raw = nasel.assign(pred=oof_pred_log, stvarno=stvarno).groupby("opstina_maticni_broj")[["pred", "stvarno"]].sum()
+po_grupi_kal = nasel.assign(pred=oof_pred_log_kal, stvarno=stvarno).groupby("opstina_maticni_broj")[["pred", "stvarno"]].sum()
+mm = max(float(po_grupi_raw.stvarno.max()), float(po_grupi_raw.pred.max()), float(po_grupi_kal.pred.max()), 1.0)
+ax[2].scatter(po_grupi_raw.stvarno, po_grupi_raw.pred, s=35, label="bez kalibracije")
+ax[2].scatter(po_grupi_kal.stvarno, po_grupi_kal.pred, s=35, label="kalibrisano")
+ax[2].plot([1, mm], [1, mm], "r--")
+ax[2].set_title(f"OOF agregacija po opstini (R2 {agg_raw['oof_opstina_r2']:.2f} -> {agg_kal['oof_opstina_r2']:.2f})")
+ax[2].set_xlabel("stvarno"); ax[2].set_ylabel("predvidjeno"); ax[2].legend()
+plt.tight_layout()
+
+# isti MLflow protokol kao ostale evaluacije: metrike + rezime grafik kao artefakti
+podesi_mlflow()
+with mlflow.start_run(run_name=f"tiles-log-isotonic-kalibracija-cv{len(FOLDS)}"):
+    mlflow.log_params({**CFG, "pristup": "tiles_log_isotonic",
+                       "kalibracija": "IsotonicRegression(log1p, leave-fold-out)",
+                       "cv": f"GroupKFold(opstina) x{len(FOLDS)}",
+                       "n_naselja": len(nasel), "n_opstina": int(broj_opstina)})
+    mlflow.log_metrics({f"{k}_sirovo": v for k, v in agg_raw.items()})
+    mlflow.log_metrics({f"{k}_kalibrisano": v for k, v in agg_kal.items()})
+    mlflow.log_text(poredjenje_kal.to_string(), "poredjenje_isotonic.txt")
+    mlflow.log_figure(fig_kal, "kalibracija_isotonic_tiles_log.png")
+    # namerno NIJE u fusion_train.KANDIDATI: kriva je fitovana nad ovdasnjim FOLDS-om, a fuzija
+    # pravi svoje foldove nad presekom naselja — mesanje bi unelo curenje. Fuzija ionako radi
+    # sopstvenu kalibraciju svakog pristupa.
+    mlflow.log_artifact(sacuvaj_oof(nasel, oof_pred_log_kal, "tiles_log_kal", OUT_DIR))
+
+print("=== Efekat kalibracije velikih vrednosti (log1p isotonic, leave-fold-out) ===")
+display(poredjenje_kal)
+plt.show()
+
