@@ -17,8 +17,8 @@ KORAK_M = 2240.0          # 224 px * 10 m: disjunktne plocice, suma plocica = na
 POLA_M = KORAK_M / 2
 
 
-def ucitaj_naselja(okruzi_sa_kompozitom: set[int]) -> gpd.GeoDataFrame:
-    # Naselja sa geometrijom, centroidom i labelom, samo iz pokrivenih okruga.
+def load_settlements(okruzi_sa_kompozitom: set[int]) -> gpd.GeoDataFrame:
+    # Settlements sa geometrijom, centroidom i labelom, samo iz pokrivenih okruga.
     naselja = gpd.read_file(config.NASELJA_GPKG)[
         ["naselje_maticni_broj", "opstina_maticni_broj", "geometry"]]
     okruzi = pyogrio.read_dataframe(config.OPSTINE_GPKG, read_geometry=False)[
@@ -31,7 +31,7 @@ def ucitaj_naselja(okruzi_sa_kompozitom: set[int]) -> gpd.GeoDataFrame:
     return naselja[naselja.okrug_sifra.isin(okruzi_sa_kompozitom)]
 
 
-def iseci_plocicu(kompozit, tx: float, ty: float) -> np.ndarray:
+def crop_tile(kompozit, tx: float, ty: float) -> np.ndarray:
     # Plocica (OPSEGA, PX, PX) oko (tx, ty), dopunjena nulama na rubu kompozita.
     prozor = from_bounds(tx - POLA_M, ty - POLA_M, tx + POLA_M, ty + POLA_M,
                          kompozit.transform)
@@ -42,7 +42,7 @@ def iseci_plocicu(kompozit, tx: float, ty: float) -> np.ndarray:
     return plocica
 
 
-def centroidi_zgrada(zgrade: gpd.GeoDataFrame, prostorni_indeks, poligon) -> np.ndarray:
+def building_centroids(zgrade: gpd.GeoDataFrame, prostorni_indeks, poligon) -> np.ndarray:
     # Koordinate centroida zgrada koje seku dato naselje, kao (N, 2) niz.
     u_naselju = zgrade.iloc[list(prostorni_indeks.query(poligon, predicate="intersects"))]
     if not len(u_naselju):
@@ -50,7 +50,7 @@ def centroidi_zgrada(zgrade: gpd.GeoDataFrame, prostorni_indeks, poligon) -> np.
     return np.array([(g.x, g.y) for g in u_naselju.geometry.centroid])
 
 
-def raspon_plocica(poligon, cx: float, cy: float) -> tuple[range, range]:
+def tile_range(poligon, cx: float, cy: float) -> tuple[range, range]:
     # Indeksi plocica (i, j) koji pokrivaju bounding box naselja, sa rezervom.
     minx, miny, maxx, maxy = poligon.bounds
     i_od = int(np.floor((minx - cx) / KORAK_M)) - 1
@@ -60,13 +60,13 @@ def raspon_plocica(poligon, cx: float, cy: float) -> tuple[range, range]:
     return range(i_od, i_do + 1), range(j_od, j_do + 1)
 
 
-def ima_zgradu(centroidi: np.ndarray, tx: float, ty: float) -> bool:
+def has_building(centroidi: np.ndarray, tx: float, ty: float) -> bool:
     # Da li bar jedan centroid zgrade pada u plocicu (prazne njive se preskacu).
     return bool(((centroidi[:, 0] >= tx - POLA_M) & (centroidi[:, 0] < tx + POLA_M) &
                  (centroidi[:, 1] >= ty - POLA_M) & (centroidi[:, 1] < ty + POLA_M)).any())
 
 
-def plocice_naselja(kompozit, naselje, centroidi: np.ndarray) -> list[dict]:
+def settlement_tiles(kompozit, naselje, centroidi: np.ndarray) -> list[dict]:
     # Sve plocice jednog naselja, snimljene; vraca redove za indeks. Naselje kome nijedna
     # plocica ne prodje dobija centralnu, da ne ispadne iz skupa.
     maticni_broj = int(naselje.naselje_maticni_broj)
@@ -74,29 +74,29 @@ def plocice_naselja(kompozit, naselje, centroidi: np.ndarray) -> list[dict]:
     cx, cy = float(naselje.cx), float(naselje.cy)
     redovi = []
 
-    i_opseg, j_opseg = raspon_plocica(naselje.geometry, cx, cy)
+    i_opseg, j_opseg = tile_range(naselje.geometry, cx, cy)
     for i in i_opseg:
         for j in j_opseg:
             tx, ty = cx + i * KORAK_M, cy + j * KORAK_M
             if len(centroidi):
-                if not ima_zgradu(centroidi, tx, ty):
+                if not has_building(centroidi, tx, ty):
                     continue
             elif not (i == 0 and j == 0):
                 continue                      # bez zgrada: samo centralna plocica
             ime = f"{maticni_broj}_{i}_{j}.npy"
-            np.save(config.TILES / ime, iseci_plocicu(kompozit, tx, ty))
+            np.save(config.TILES / ime, crop_tile(kompozit, tx, ty))
             redovi.append({"path": ime, "naselje_maticni_broj": maticni_broj,
                            "pop": populacija})
 
     if not redovi:
         ime = f"{maticni_broj}_0_0.npy"
-        np.save(config.TILES / ime, iseci_plocicu(kompozit, cx, cy))
+        np.save(config.TILES / ime, crop_tile(kompozit, cx, cy))
         redovi.append({"path": ime, "naselje_maticni_broj": maticni_broj,
                        "pop": populacija})
     return redovi
 
 
-def ucitaj_zgrade(okrug: int) -> gpd.GeoDataFrame:
+def load_buildings(okrug: int) -> gpd.GeoDataFrame:
     # Overture otisci jednog okruga u metarskom CRS-u.
     zgrade = gpd.read_parquet(config.OVERTURE_OKRUG / f"okrug_{okrug}.parquet")
     if zgrade.crs is None:
@@ -106,23 +106,23 @@ def ucitaj_zgrade(okrug: int) -> gpd.GeoDataFrame:
 
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    config.obezbedi(config.TILES)
+    config.ensure_dirs(config.TILES)
 
     kompoziti = {int(f.stem.split("_")[1]) for f in config.OKRUG_COMP.glob("okrug_*.tiff")}
     print("okruzi sa kompozitom:", sorted(kompoziti))
 
-    naselja = ucitaj_naselja(kompoziti)
+    naselja = load_settlements(kompoziti)
     print("naselja:", len(naselja))
 
     redovi = []
     for sifra in sorted(naselja.okrug_sifra.unique()):
         okrug = int(sifra)
-        zgrade = ucitaj_zgrade(okrug)
+        zgrade = load_buildings(okrug)
         prostorni_indeks = zgrade.sindex
         with rasterio.open(config.OKRUG_COMP / f"okrug_{okrug}.tiff") as kompozit:
             for _, naselje in naselja[naselja.okrug_sifra == sifra].iterrows():
-                centroidi = centroidi_zgrada(zgrade, prostorni_indeks, naselje.geometry)
-                redovi.extend(plocice_naselja(kompozit, naselje, centroidi))
+                centroidi = building_centroids(zgrade, prostorni_indeks, naselje.geometry)
+                redovi.extend(settlement_tiles(kompozit, naselje, centroidi))
         print(f"okrug {okrug}: plocica do sada {len(redovi)}", flush=True)
 
     indeks = pd.DataFrame(redovi)

@@ -20,7 +20,7 @@ PREUZIMANJE_TIMEOUT_S = 600
 ATRIBUTI = config.FP_AGREGIRANI      # spisak atributa i zasto bas ti: config.py
 
 
-def ucitaj_naselja() -> gpd.GeoDataFrame:
+def load_settlements() -> gpd.GeoDataFrame:
     # Geometrija naselja sa pridruzenom sifrom okruga (petlja ide po okrugu).
     naselja = gpd.read_file(config.NASELJA_GPKG)[
         ["naselje_maticni_broj", "opstina_maticni_broj", "geometry"]]
@@ -29,7 +29,7 @@ def ucitaj_naselja() -> gpd.GeoDataFrame:
     return naselja.merge(okruzi, on="opstina_maticni_broj", how="left")
 
 
-def preuzmi_otiske(naselja_okruga: gpd.GeoDataFrame, putanja: Path) -> None:
+def download_footprints(naselja_okruga: gpd.GeoDataFrame, putanja: Path) -> None:
     # Skine Overture otiske za bbox okruga, ako fajl vec ne postoji.
     if putanja.exists():
         return
@@ -40,7 +40,7 @@ def preuzmi_otiske(naselja_okruga: gpd.GeoDataFrame, putanja: Path) -> None:
         check=True, capture_output=True, timeout=PREUZIMANJE_TIMEOUT_S)
 
 
-def geometrijski_atributi(zgrade: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+def geometric_attributes(zgrade: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     # Po zgradi: povrsina, kompaktnost, oznaka velike, mere rasporeda. Rastojanje i broj
     # suseda idu nad SVIM zgradama okruga, ne po naselju: inace bi zgrada tik uz granicu
     # naselja ispala usamljena.
@@ -58,7 +58,7 @@ def geometrijski_atributi(zgrade: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     return zgrade
 
 
-def agregiraj_po_naselju(zgrade: gpd.GeoDataFrame,
+def aggregate_by_settlement(zgrade: gpd.GeoDataFrame,
                          naselja_okruga: gpd.GeoDataFrame) -> pd.DataFrame:
     # Zgrade svrstane u naselja po centroidu, pa svedene na atribute naselja.
     kolone = ["ba", "compact", "velika", "nn_dist", "n_50m"]
@@ -80,7 +80,7 @@ def agregiraj_po_naselju(zgrade: gpd.GeoDataFrame,
     ).reset_index()
 
 
-def atributi_po_okruzima(naselja: gpd.GeoDataFrame) -> tuple[pd.DataFrame, list[int]]:
+def attributes_by_district(naselja: gpd.GeoDataFrame) -> tuple[pd.DataFrame, list[int]]:
     # (atributi, sifre palih okruga). Ide okrug po okrug, sve zgrade ne staju u RAM.
     delovi, pali = [], []
     sifre = sorted(naselja.okrug_sifra.dropna().unique().tolist())
@@ -92,7 +92,7 @@ def atributi_po_okruzima(naselja: gpd.GeoDataFrame) -> tuple[pd.DataFrame, list[
             ["naselje_maticni_broj", "geometry"]]
         putanja = config.OVERTURE_OKRUG / f"okrug_{okrug}.parquet"
         try:
-            preuzmi_otiske(naselja_okruga, putanja)
+            download_footprints(naselja_okruga, putanja)
             zgrade = gpd.read_parquet(putanja)
             if len(zgrade) == 0:
                 print(f"okrug {okrug}: 0 zgrada")
@@ -100,8 +100,8 @@ def atributi_po_okruzima(naselja: gpd.GeoDataFrame) -> tuple[pd.DataFrame, list[
             if zgrade.crs is None:
                 zgrade = zgrade.set_crs(CRS_STEPENI)
 
-            zgrade = geometrijski_atributi(zgrade)
-            agregat = agregiraj_po_naselju(zgrade, naselja_okruga)
+            zgrade = geometric_attributes(zgrade)
+            agregat = aggregate_by_settlement(zgrade, naselja_okruga)
             delovi.append(agregat)
             print(f"okrug {okrug}: zgrada {len(zgrade)} -> naselja pokrivena {len(agregat)}")
         except Exception as greska:
@@ -113,12 +113,12 @@ def atributi_po_okruzima(naselja: gpd.GeoDataFrame) -> tuple[pd.DataFrame, list[
     return pd.DataFrame(columns=["naselje_maticni_broj", *ATRIBUTI]), pali
 
 
-def spoji_sa_tabelom(atributi: pd.DataFrame) -> pd.DataFrame:
+def join_with_table(atributi: pd.DataFrame) -> pd.DataFrame:
     # Atributi pridruzeni master tabeli, sa izvedenim gustinama.
     tabela = pd.read_parquet(config.NASELJE_TABLE)
     spojeno = tabela.merge(atributi, on="naselje_maticni_broj", how="left")
 
-    # Naselja bez ijedne zgrade: kolicine su 0, a atributi oblika i rasporeda
+    # Settlements bez ijedne zgrade: kolicine su 0, a atributi oblika i rasporeda
     # nedefinisani. 0 je i tu bezbedno jer n_buildings=0 nosi tu informaciju.
     for kolona in ATRIBUTI:
         spojeno[kolona] = spojeno[kolona].fillna(0)
@@ -131,7 +131,7 @@ def spoji_sa_tabelom(atributi: pd.DataFrame) -> pd.DataFrame:
     return spojeno
 
 
-def stampaj_rezime(spojeno: pd.DataFrame) -> None:
+def print_summary(spojeno: pd.DataFrame) -> None:
     # Korelacije atributa sa populacijom, provera da signal uopste postoji.
     bez_zgrada = int((spojeno.n_buildings == 0).sum())
     sa_zgradama = spojeno[spojeno.n_buildings > 0]
@@ -158,16 +158,16 @@ def stampaj_rezime(spojeno: pd.DataFrame) -> None:
 
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    config.obezbedi(config.DATASET_DIR, config.OVERTURE_OKRUG)
+    config.ensure_dirs(config.DATASET_DIR, config.OVERTURE_OKRUG)
 
-    naselja = ucitaj_naselja()
-    atributi, pali = atributi_po_okruzima(naselja)
-    spojeno = spoji_sa_tabelom(atributi)
+    naselja = load_settlements()
+    atributi, pali = attributes_by_district(naselja)
+    spojeno = join_with_table(atributi)
 
     spojeno.to_csv(config.NASELJE_FOOTPRINTS_CSV, index=False, encoding="utf-8-sig")
     spojeno.to_parquet(config.NASELJE_FOOTPRINTS, index=False)
 
-    stampaj_rezime(spojeno)
+    print_summary(spojeno)
     if pali:
         print("\nUPOZORENJE: okruzi bez atributa:", pali, "- rezultat je nepotpun")
     print(f"\nWROTE {config.NASELJE_FOOTPRINTS}")

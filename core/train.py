@@ -16,7 +16,7 @@ def seed_everything(seed: int = 42) -> None:
     torch.cuda.manual_seed_all(seed)
 
 
-def prodji(
+def run_pass(
     net: nn.Module,
     loader,
     treniraj: bool,
@@ -29,7 +29,7 @@ def prodji(
     device: str = "cpu",
 ) -> tuple[float, np.ndarray, np.ndarray]:
     # Jedan prolaz kroz DataLoader; vraca (avg_loss, predikcije, ciljevi). Za ulaze oblika
-    # (x, y). tiles_train ima svoj prodji sa scatter_add agregacionim loss-om i ne koristi
+    # (x, y). tiles_train ima svoj run_pass sa scatter_add agregacionim loss-om i ne koristi
     # ovaj.
     net.train(treniraj)
     if freeze_bn:
@@ -67,7 +67,7 @@ def prodji(
     return ukupno / len(loader.dataset), np.concatenate(P).ravel(), np.concatenate(Y).ravel()
 
 
-def dvofazni_trening(
+def two_phase_train(
     net: nn.Module,
     epoha_fn: Callable[[torch.optim.Optimizer, int, bool], float],
     epochs_head: int,

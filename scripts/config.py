@@ -13,7 +13,7 @@ RESULTS = KOREN / "results"                                    # tabele i sazeci
 FIGURES = KOREN / "figures"                                    # slike, u gitu
 
 
-def _tabela(ime: str) -> Path:
+def _table(ime: str) -> Path:
     # pipeline pise u DATA/dataset/, na Volume-u stoje ravno u DATA/
     ugnjezdena = DATA / "dataset" / ime
     ravna = DATA / ime
@@ -30,11 +30,11 @@ SENTINEL_DIR = DATA / "sentinel"                               # pojedinacni .ti
 # --- medjukoraci (pravi ih pipeline, cita ih sledeci korak) ---------------
 NASELJE_POP = DATA / "rzs" / "naselje_pop_final.csv"           # preprocessing.build_labels
 DATASET_DIR = DATA / "dataset"
-NASELJE_TABLE = _tabela("naselje_table.parquet")               # preprocessing.make_dataset_table
-NASELJE_TABLE_CSV = _tabela("naselje_table.csv")
-NASELJE_FOOTPRINTS = _tabela("naselje_footprints.parquet")     # footprint.per_naselje
-NASELJE_FOOTPRINTS_CSV = _tabela("naselje_footprints.csv")
-TILES_INDEX = _tabela("tiles_index.csv")                       # sentinel.tiles
+NASELJE_TABLE = _table("naselje_table.parquet")               # preprocessing.make_dataset_table
+NASELJE_TABLE_CSV = _table("naselje_table.csv")
+NASELJE_FOOTPRINTS = _table("naselje_footprints.parquet")     # footprint.per_naselje
+NASELJE_FOOTPRINTS_CSV = _table("naselje_footprints.csv")
+TILES_INDEX = _table("tiles_index.csv")                       # sentinel.tiles
 
 OVERTURE_OKRUG = DATA / "overture_okrug"    # otisci po okrugu, ulaz za rastere i plocice
 OVERTURE_RURAL = DATA / "overture_rural"    # otisci uzorka sela (dijagnostika)
@@ -50,7 +50,7 @@ RURAL_FOOTPRINTS = RESULTS / "rural_footprints.csv"            # footprint.cover
 OVERTURE_POPUNJENOST = RESULTS / "overture_popunjenost_atributa.csv"
 
 
-def obezbedi(*putanje: Path) -> None:
+def ensure_dirs(*putanje: Path) -> None:
     # napravi direktorijume ako ne postoje
     for putanja in putanje:
         os.makedirs(putanja, exist_ok=True)

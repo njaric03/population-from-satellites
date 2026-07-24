@@ -23,7 +23,7 @@ DEPOPULACIJA_SEED = 7
 OPISNI_ATRIBUTI = ["num_floors", "height", "subtype", "class", "roof_shape"]
 
 
-def uzorkuj_sela() -> gpd.GeoDataFrame:
+def sample_villages() -> gpd.GeoDataFrame:
     # Nasumican uzorak sela i depopulacionih naselja, sa fiksnim seed-om.
     naselja = gpd.read_file(config.NASELJA_GPKG)
     labele = pd.read_csv(config.NASELJE_POP)
@@ -36,7 +36,7 @@ def uzorkuj_sela() -> gpd.GeoDataFrame:
     ])
 
 
-def preuzmi_otiske(granice, putanja: Path) -> None:
+def download_footprints(granice, putanja: Path) -> None:
     # Overture otisci za bbox jednog naselja; preskace ako je vec kesirano.
     if putanja.exists():
         return
@@ -47,7 +47,7 @@ def preuzmi_otiske(granice, putanja: Path) -> None:
         check=True, capture_output=True, timeout=PREUZIMANJE_TIMEOUT_S)
 
 
-def prebroj_izvore(zgrade: gpd.GeoDataFrame) -> dict[str, int]:
+def count_sources(zgrade: gpd.GeoDataFrame) -> dict[str, int]:
     # Koliko zgrada iz kog Overture izvora; sources je lista recnika po zgradi.
     if not len(zgrade) or "sources" not in zgrade.columns:
         return {}
@@ -62,11 +62,11 @@ def prebroj_izvore(zgrade: gpd.GeoDataFrame) -> dict[str, int]:
     return tally
 
 
-def pokrivenost_sela() -> pd.DataFrame:
+def village_coverage() -> pd.DataFrame:
     # Po uzorkovanom selu: broj zgrada, krovna povrsina, glavni izvor. Rizik za pristup 2:
     # ako su otisci retki u selima, izgradjenost je nepouzdan signal bas tamo gde je
     # populacija najmanja.
-    uzorak = uzorkuj_sela()
+    uzorak = sample_villages()
     u_stepenima = uzorak.to_crs(CRS_STEPENI)
     redovi = []
 
@@ -74,7 +74,7 @@ def pokrivenost_sela() -> pd.DataFrame:
         poligon = u_stepenima.loc[indeks, "geometry"]
         putanja = config.OVERTURE_RURAL / f"{naselje.naselje_maticni_broj}.parquet"
         try:
-            preuzmi_otiske(poligon.bounds, putanja)
+            download_footprints(poligon.bounds, putanja)
             zgrade = gpd.read_parquet(putanja)
             if len(zgrade):
                 if zgrade.crs is None:
@@ -83,7 +83,7 @@ def pokrivenost_sela() -> pd.DataFrame:
 
             broj = len(zgrade)
             povrsina = round(float(zgrade.to_crs(CRS_METRI).area.sum())) if broj else 0
-            izvori = prebroj_izvore(zgrade)
+            izvori = count_sources(zgrade)
             glavni = max(izvori, key=izvori.get) if izvori else "-"
             redovi.append((naselje.naselje_ime, naselje.opstina_ime, int(naselje["pop"]),
                            broj, povrsina, round(broj / max(int(naselje["pop"]), 1), 2), glavni))
@@ -96,7 +96,7 @@ def pokrivenost_sela() -> pd.DataFrame:
                                          "roof_m2", "bldg_per_cap", "top_source"])
 
 
-def popunjenost_atributa() -> pd.DataFrame:
+def attribute_fill_rate() -> pd.DataFrame:
     # Udeo popunjenih opisnih Overture kolona, po okrugu i ukupno. Zasto per_naselje racuna
     # sve iz geometrije: ovi atributi su retki i neravnomerni, pa mere gustinu mapiranja a
     # ne izgradjenost.
@@ -128,9 +128,9 @@ def popunjenost_atributa() -> pd.DataFrame:
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     # oba izlaza su terminalna (nista ih dalje ne cita kao ulaz) -> results/
-    config.obezbedi(config.RESULTS, config.OVERTURE_RURAL)
+    config.ensure_dirs(config.RESULTS, config.OVERTURE_RURAL)
 
-    sela = pokrivenost_sela()
+    sela = village_coverage()
     print(sela.to_string(index=False))
     sela.to_csv(config.RURAL_FOOTPRINTS, index=False, encoding="utf-8-sig")
 
@@ -140,7 +140,7 @@ def main() -> None:
           round(float(pokrivena.bldg_per_cap.median()), 2) if len(pokrivena) else "n/a")
     print("source tally top:", sela.top_source.value_counts().to_dict())
 
-    atributi = popunjenost_atributa()
+    atributi = attribute_fill_rate()
     if atributi.empty:
         print("\n(nema kesiranih okruga u", config.OVERTURE_OKRUG, "- pokreni footprint.per_naselje)")
         return

@@ -11,7 +11,7 @@ from torch.utils.data import Dataset, DataLoader
 NW: int = min(8, (os.cpu_count() or 2))
 
 
-def stats_po_opsegu(paths: list[str]) -> tuple[np.ndarray, np.ndarray]:
+def channel_stats(paths: list[str]) -> tuple[np.ndarray, np.ndarray]:
     # Per-channel mean i std, oblika (1, C, 1, 1). Zvati SAMO nad trening skupom tekuceg
     # folda, inace curi u validaciju.
     uzorak = np.stack(
@@ -22,7 +22,7 @@ def stats_po_opsegu(paths: list[str]) -> tuple[np.ndarray, np.ndarray]:
     return mean, std
 
 
-class Naselja(Dataset):
+class Settlements(Dataset):
     # Dataset za jedan .npy po naselju; frame treba kolone path i y.
 
     def __init__(
@@ -62,7 +62,7 @@ def seed_worker(wid: int, seed: int = 42) -> None:
     random.seed(s)
 
 
-def napravi_loadere(
+def make_loaders(
     train_frame,
     val_frame,
     batch_size: int,
@@ -70,14 +70,14 @@ def napravi_loadere(
 ) -> tuple[DataLoader, DataLoader]:
     # (train_dl, val_dl); normalizacija se racuna samo iz trening folda. Kolonu y postavlja
     # pozivalac, npr. np.log1p(frame["pop"]).
-    mean, std = stats_po_opsegu(train_frame.path.tolist())
+    mean, std = channel_stats(train_frame.path.tolist())
 
     def _sw(wid: int) -> None:
         seed_worker(wid, seed)
 
     gen = torch.Generator().manual_seed(seed)
     tdl = DataLoader(
-        Naselja(train_frame, mean, std, augment=True),
+        Settlements(train_frame, mean, std, augment=True),
         batch_size=batch_size,
         shuffle=True,
         # poslednji batch od tacno 1 uzorka ruši BatchNorm u trening modu
@@ -91,7 +91,7 @@ def napravi_loadere(
         prefetch_factor=4 if NW else None,
     )
     vdl = DataLoader(
-        Naselja(val_frame, mean, std),
+        Settlements(val_frame, mean, std),
         batch_size=batch_size,
         num_workers=NW,
         pin_memory=True,

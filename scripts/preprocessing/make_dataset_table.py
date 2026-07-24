@@ -9,7 +9,7 @@ from scripts import config
 KOORDINATE_CRS = 4326      # WGS84, za lon/lat kolone uz projektovane cx/cy
 
 
-def ucitaj_naselja() -> gpd.GeoDataFrame:
+def load_settlements() -> gpd.GeoDataFrame:
     # Geometrija naselja spojena sa labelom i sifrom okruga.
     naselja = gpd.read_file(config.NASELJA_GPKG)
     labele = pd.read_csv(config.NASELJE_POP)
@@ -23,7 +23,7 @@ def ucitaj_naselja() -> gpd.GeoDataFrame:
     return naselja
 
 
-def centroidi(naselja: gpd.GeoDataFrame) -> tuple[gpd.GeoSeries, pd.Series]:
+def centroids(naselja: gpd.GeoDataFrame) -> tuple[gpd.GeoSeries, pd.Series]:
     # Centroid po naselju + maska onih kojima je pao unutar poligona. Kod konkavnog oblika
     # centroid ume da padne izvan naselja, pa bi isecak bio centriran na tudje zemljiste;
     # takvi dobijaju representative_point().
@@ -34,10 +34,10 @@ def centroidi(naselja: gpd.GeoDataFrame) -> tuple[gpd.GeoSeries, pd.Series]:
     return gpd.GeoSeries(ispravljeni, crs=naselja.crs), unutra
 
 
-def napravi_tabelu() -> tuple[pd.DataFrame, pd.Series]:
+def build_table() -> tuple[pd.DataFrame, pd.Series]:
     # Master tabela: labela, grupisanje, povrsina, centroid (+ maska centroida).
-    naselja = ucitaj_naselja()
-    cent, unutra = centroidi(naselja)
+    naselja = load_settlements()
+    cent, unutra = centroids(naselja)
     naselja["cx"] = cent.x.round(1)
     naselja["cy"] = cent.y.round(1)
 
@@ -52,9 +52,9 @@ def napravi_tabelu() -> tuple[pd.DataFrame, pd.Series]:
 
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    config.obezbedi(config.DATASET_DIR)
+    config.ensure_dirs(config.DATASET_DIR)
 
-    tab, unutra = napravi_tabelu()
+    tab, unutra = build_table()
     tab.to_parquet(config.NASELJE_TABLE, index=False)
     tab.to_csv(config.NASELJE_TABLE_CSV, index=False, encoding="utf-8-sig")
 

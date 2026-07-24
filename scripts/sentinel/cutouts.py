@@ -28,7 +28,7 @@ OKRUZI_SUBSET = [0, 10, 12, 19, 22]
 OPENEO_HOST = "openeo.dataspace.copernicus.eu"
 
 
-def ucitaj_naselja() -> gpd.GeoDataFrame:
+def load_settlements() -> gpd.GeoDataFrame:
     # Geometrija naselja sa sifrom okruga, centroidom i labelom.
     naselja = gpd.read_file(config.NASELJA_GPKG)[
         ["naselje_maticni_broj", "opstina_maticni_broj", "geometry"]]
@@ -40,20 +40,20 @@ def ucitaj_naselja() -> gpd.GeoDataFrame:
     return naselja.merge(tabela, on="naselje_maticni_broj", how="inner")
 
 
-def izaberi_okruge(naselja: gpd.GeoDataFrame, rezim: str) -> list:
+def select_districts(naselja: gpd.GeoDataFrame, rezim: str) -> list:
     # Okruzi za obradu prema rezimu: najmanji jedan, fiksni podskup ili svi.
     sve = sorted(naselja.okrug_sifra.dropna().unique().tolist())
     if rezim == "test":
-        def povrsina_bboxa(sifra):
+        def bbox_area(sifra):
             zapad, jug, istok, sever = naselja[naselja.okrug_sifra == sifra].total_bounds
             return (istok - zapad) * (sever - jug)
-        return [min(sve, key=povrsina_bboxa)]
+        return [min(sve, key=bbox_area)]
     if rezim == "subset":
         return [k for k in OKRUZI_SUBSET if k in set(sve)]
     return sve
 
 
-def ispravan_tiff(putanja: Path) -> bool:
+def valid_tiff(putanja: Path) -> bool:
     # Da li se GTiff otvara i cita; prekinut download ostavi fajl koji puca.
     try:
         with rasterio.open(putanja) as dataset:
@@ -63,7 +63,7 @@ def ispravan_tiff(putanja: Path) -> bool:
         return False
 
 
-def povezi_se():
+def connect():
     # openEO veza sa autentikacijom; zove se tek kad kompozit stvarno fali.
     import openeo
     veza = openeo.connect(OPENEO_HOST)
@@ -72,7 +72,7 @@ def povezi_se():
     return veza
 
 
-def preuzmi_kompozit(veza, naselja_okruga: gpd.GeoDataFrame, putanja: Path, okrug: int) -> bool:
+def download_composite(veza, naselja_okruga: gpd.GeoDataFrame, putanja: Path, okrug: int) -> bool:
     # Medijan kompozit okruga preko openEO batch posla; 25 poslova umesto 4720.
     zapad, jug, istok, sever = naselja_okruga.total_bounds
     opseg = {"west": zapad - REZERVA_M, "south": jug - REZERVA_M,
@@ -89,7 +89,7 @@ def preuzmi_kompozit(veza, naselja_okruga: gpd.GeoDataFrame, putanja: Path, okru
     for pokusaj in range(POKUSAJA):
         try:
             kocka.execute_batch(putanja, out_format="GTiff", title=f"okrug_{okrug}")
-            if ispravan_tiff(putanja):
+            if valid_tiff(putanja):
                 return True
             print(f"okrug {okrug}: download nepotpun", flush=True)
         except Exception as greska:
@@ -101,7 +101,7 @@ def preuzmi_kompozit(veza, naselja_okruga: gpd.GeoDataFrame, putanja: Path, okru
     return False
 
 
-def iseci_naselje(kompozit, cx: float, cy: float) -> np.ndarray:
+def crop_settlement(kompozit, cx: float, cy: float) -> np.ndarray:
     # Isecak (OPSEZI, PX, PX) oko centroida, dopunjen nulama do pune velicine.
     prozor = from_bounds(cx - POLA_STRANE_M, cy - POLA_STRANE_M,
                          cx + POLA_STRANE_M, cy + POLA_STRANE_M, kompozit.transform)
@@ -112,7 +112,7 @@ def iseci_naselje(kompozit, cx: float, cy: float) -> np.ndarray:
     return isecak
 
 
-def iseci_okrug(putanja_kompozita: Path, naselja_okruga: gpd.GeoDataFrame,
+def crop_district(putanja_kompozita: Path, naselja_okruga: gpd.GeoDataFrame,
                 gotova: set[int]) -> list[dict]:
     # Isecci za sva naselja okruga koja jos nisu u indeksu.
     redovi = []
@@ -121,7 +121,7 @@ def iseci_okrug(putanja_kompozita: Path, naselja_okruga: gpd.GeoDataFrame,
             maticni_broj = int(naselje.naselje_maticni_broj)
             if maticni_broj in gotova:
                 continue
-            isecak = iseci_naselje(kompozit, float(naselje.cx), float(naselje.cy))
+            isecak = crop_settlement(kompozit, float(naselje.cx), float(naselje.cy))
             np.save(config.CUTOUTS / f"{maticni_broj}.npy", isecak)
             redovi.append({
                 "naselje_maticni_broj": maticni_broj,
@@ -141,9 +141,9 @@ def main() -> None:
                         help="test = 1 najmanji okrug, subset = 5 okruga, full = svi")
     rezim = parser.parse_args().rezim
 
-    config.obezbedi(config.CUTOUTS, config.OKRUG_COMP)
-    naselja = ucitaj_naselja()
-    okruzi = izaberi_okruge(naselja, rezim)
+    config.ensure_dirs(config.CUTOUTS, config.OKRUG_COMP)
+    naselja = load_settlements()
+    okruzi = select_districts(naselja, rezim)
     print("okruzi za obradu:", [int(k) for k in okruzi], flush=True)
 
     gotova = set()
@@ -159,19 +159,19 @@ def main() -> None:
         putanja = config.OKRUG_COMP / f"okrug_{okrug}.tiff"
         merenje = time.time()
 
-        if putanja.exists() and not ispravan_tiff(putanja):
+        if putanja.exists() and not valid_tiff(putanja):
             print(f"okrug {okrug}: neispravan kompozit -> brisem", flush=True)
             putanja.unlink()
         if not putanja.exists():
             if veza is None:            # veza se otvara tek kad neki kompozit fali
-                veza = povezi_se()
-            if not preuzmi_kompozit(veza, naselja_okruga, putanja, okrug):
+                veza = connect()
+            if not download_composite(veza, naselja_okruga, putanja, okrug):
                 print(f"okrug {okrug} PRESKOCEN ({POKUSAJA} pokusaja)", flush=True)
                 continue
             print(f"okrug {okrug}: kompozit {time.time() - merenje:.0f}s, "
                   f"{putanja.stat().st_size / 1e6:.0f}MB", flush=True)
 
-        redovi = iseci_okrug(putanja, naselja_okruga, gotova)
+        redovi = crop_district(putanja, naselja_okruga, gotova)
         if redovi:
             # indeks se dopisuje po okrugu, pa prekid ne gubi vec obradjene okruge
             pd.DataFrame(redovi).to_csv(

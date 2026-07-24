@@ -12,16 +12,16 @@ from scripts.config import NA_DATABRICKSU, VOLUME
 EXPERIMENT = "/Users/korisnik/procena_stanovnika"
 
 
-def izlazni_dir() -> Path:
+def output_dir() -> Path:
     # tezine i OOF parquet: UC Volume na Databricksu, out/ lokalno
     izlaz = VOLUME if NA_DATABRICKSU else Path("out")
     os.makedirs(izlaz, exist_ok=True)
     return izlaz
 
 
-def podesi_mlflow(experiment: str = EXPERIMENT) -> None:
+def setup_mlflow(experiment: str = EXPERIMENT) -> None:
     # MLflow tracking: Databricks workspace, lokalno mlruns/
-    import mlflow   # lazy: izlazni_dir i sacuvaj_oof ne zavise od mlflow-a
+    import mlflow   # lazy: output_dir i save_oof ne zavise od mlflow-a
 
     if NA_DATABRICKSU:
         mlflow.set_experiment(experiment)
@@ -31,7 +31,7 @@ def podesi_mlflow(experiment: str = EXPERIMENT) -> None:
     mlflow.set_experiment(experiment.rsplit("/", 1)[-1])
 
 
-def sacuvaj_oof(
+def save_oof(
     df: pd.DataFrame,
     oof_pred: np.ndarray,
     pristup: str,

@@ -33,7 +33,7 @@ def n_plain(s) -> str:
     return re.sub(r"\s+", " ", str(s).upper().replace("\n", " ")).strip()
 
 
-def ucitaj_rzs() -> pd.DataFrame:
+def load_rzs() -> pd.DataFrame:
     # Popis 2022 (.xlsx) -> (opstina, naselje, pop, k_op, k_na). Tabela nema sifre;
     # hijerarhija je u uvlacenju celije, indent 2 = opstina, indent 4 = naselje.
     # "Градска"/"Остала" su medjuzbirovi.
@@ -60,7 +60,7 @@ def ucitaj_rzs() -> pd.DataFrame:
     return rzs
 
 
-def ucitaj_rpj() -> pd.DataFrame:
+def load_rpj() -> pd.DataFrame:
     # GeoSrbija RPJ -> maticni broj i imena naselja (bez geometrije).
     g = pyogrio.read_dataframe(config.NASELJA_GPKG, read_geometry=False)[
         ["naselje_maticni_broj", "naselje_ime", "opstina_ime"]].copy()
@@ -69,11 +69,11 @@ def ucitaj_rpj() -> pd.DataFrame:
     return g
 
 
-def spoji_labele(rzs: pd.DataFrame = None, rpj: pd.DataFrame = None) -> pd.DataFrame:
+def merge_labels(rzs: pd.DataFrame = None, rpj: pd.DataFrame = None) -> pd.DataFrame:
     # RPJ tabela sa dodatim pop i stage; stage 0 znaci nespojeno. Ne pise na disk i ne
     # stampa, dijagnostika je na pozivaocu.
-    rzs = ucitaj_rzs() if rzs is None else rzs
-    g = (ucitaj_rpj() if rpj is None else rpj).copy()
+    rzs = load_rzs() if rzs is None else rzs
+    g = (load_rpj() if rpj is None else rpj).copy()
 
     # stage1: (opstina, naselje)
     par = rzs.drop_duplicates(["k_op", "k_na"])[["k_op", "k_na", "pop"]]
@@ -108,11 +108,11 @@ def spoji_labele(rzs: pd.DataFrame = None, rpj: pd.DataFrame = None) -> pd.DataF
 
 def main() -> None:
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    rzs, rpj = ucitaj_rzs(), ucitaj_rpj()
+    rzs, rpj = load_rzs(), load_rpj()
     print("duplikati (opstina, naselje) - RPJ:", int(rpj.duplicated(["k_op", "k_na"]).sum()),
           "| RZS:", int(rzs.duplicated(["k_op", "k_na"]).sum()))
 
-    g = spoji_labele(rzs, rpj)
+    g = merge_labels(rzs, rpj)
     for s, opis in ((1, "par (opstina, naselje)"), (2, "jedinstveno ime"), (3, "rucni crosswalk")):
         print(f"stage{s} {opis:24s}: {int((g.stage == s).sum())}")
 

@@ -7,7 +7,7 @@ from sklearn.model_selection import GroupKFold
 from sklearn.metrics import r2_score, mean_absolute_error
 
 
-def napravi_foldove(
+def make_folds(
     df: pd.DataFrame,
     group_col: str = "opstina_maticni_broj",
     n_splits: int = 5,
@@ -116,7 +116,7 @@ GLAVNE_KOLONE = [
 ]
 
 
-def metrike_runa(
+def run_metrics(
     fold_r2: list[float],
     stvarno: np.ndarray,
     oof_pred: np.ndarray,
@@ -131,7 +131,7 @@ def metrike_runa(
     }
 
 
-def rezime_linija(agg: dict, label: str) -> str:
+def summary_line(agg: dict, label: str) -> str:
     # Jednolinijski rezime runa za ispis na kraju notebooka.
     return (
         f"[{label}] CV R2 {agg['cv_mean_val_r2']:.3f} ± {agg['cv_std_val_r2']:.3f}"
@@ -143,7 +143,7 @@ def rezime_linija(agg: dict, label: str) -> str:
     )
 
 
-def kalibracija_figure(
+def calibration_figure(
     stvarno: np.ndarray,
     df: pd.DataFrame,
     pristupi: list[str],
