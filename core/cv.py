@@ -12,20 +12,8 @@ def napravi_foldove(
     group_col: str = "opstina_maticni_broj",
     n_splits: int = 5,
 ) -> list[tuple[pd.DataFrame, pd.DataFrame]]:
-    """GroupKFold podela sa proverom curenja opstina.
-
-    Broj foldova se automatski ogranicava na broj dostupnih grupa ako je
-    ``n_splits`` vece od broja opstina u ``df``.
-
-    Args:
-        df:         DataFrame sa svim uzorcima; mora imati ``group_col``.
-        group_col:  kolona po kojoj se grupise (default: ``opstina_maticni_broj``).
-        n_splits:   maksimalni broj foldova (default: 5).
-
-    Returns:
-        Lista ``(train_frame, val_frame)`` parova sa resetovanim indeksima.
-    """
-    k = min(n_splits, df[group_col].nunique())
+    # GroupKFold podela na (train, val) parove, sa proverom curenja opstina.
+    k = min(n_splits, df[group_col].nunique())      # ne vise foldova nego grupa
     gkf = GroupKFold(n_splits=k)
     folds = [
         (
@@ -51,7 +39,7 @@ STRATUM_OZNAKE  = ["do_500", "500_5k", "5k_50k", "50k_plus"]
 
 
 def _fmt(agg: dict, kljuc: str, fmt: str = ".3f") -> str:
-    """Metrika za ispis, ili "n/a" ako je oof_metrics nije vratio."""
+    # Metrika za ispis, ili "n/a" ako je oof_metrics nije vratio.
     return format(agg[kljuc], fmt) if kljuc in agg else "n/a"
 
 
@@ -61,54 +49,9 @@ def oof_metrics(
     df: pd.DataFrame,
     group_col: str = "opstina_maticni_broj",
 ) -> dict:
-    """Standardni skup OOF metrika - 13 kljuceva, bez redundantnih.
-
-    Raspodela populacije je jako iskosena (medijana naselja ~265, maksimum
-    ~260k), pa prosecne apsolutne greske i linearni R2 na sumama dominiraju
-    najveci gradovi. Zato su glavne metrike relativne:
-
-    * ``oof_r2_log``        - R2 u log1p prostoru; glavni pokazatelj uklapanja.
-    * ``oof_medape``        - medijalna apsolutna procentualna greska
-      (samo naselja sa pop > 0); "tipican procenat promasaja".
-    * ``oof_wmape``         - sum|pred-true| / sum(true); agregatna relativna
-      greska ponderisana populacijom.
-    * ``oof_bias``          - sum(pred) / sum(true); < 1 znaci sistematsko
-      potcenjivanje ukupne populacije.
-
-    Dijagnostika i kontekst:
-
-    * ``oof_kalib_nagib``   - nagib regresije log1p(true) ~ log1p(pred);
-      > 1 znaci kompresiju predikcija ka sredini. Ispravlja se post-hoc
-      kalibracijom u fuzionom notebooku.
-    * ``oof_mediana_ae`` / ``oof_mae_stanovnici`` - tipicna i prosecna greska
-      u stanovnicima; prva je robusna, druga je tu radi tumacenja reda velicine.
-    * ``oof_opstina_r2_log`` / ``..._log_bez_top2`` - agregacija po opstini,
-      sa i bez dve najvece (Beograd, Novi Sad); razdvaja "model ne radi" od
-      "megagradovi su neekstrapolabilni u GroupKFold-u".
-    * ``oof_medape_<strat>`` - po velicinskim stratumima ``do_500``,
-      ``500_5k``, ``5k_50k``, ``50k_plus``; pokazuje gde model radi a gde ne.
-
-    Namerno se NE racunaju: ``oof_rmse_log`` (determinisana funkcija
-    ``oof_r2_log`` jer je varijansa ista za sve pristupe), ``oof_mae_log``
-    (log jedinice se ne tumace), ``oof_rmse_stanovnici`` (kvadrat greske u
-    stanovnicima ga svodi na Beograd), linearni ``oof_opstina_r2`` sa i bez
-    top-2 (na rasponu opstina 5k-1.6M ga nose ili ruse dva grada), te
-    ``oof_n_<strat>`` i ``oof_mae_<strat>`` (prvo je opis skupa a ne rezultat
-    runa, drugo samo ponavlja da velika naselja imaju velike apsolutne greske).
-
-    Args:
-        stvarno:   stvarni broj stanovnika, 1D array.
-        oof_pred:  OOF predikcije u prostoru populacije (vec u stanovnicima,
-                   ne u log-prostoru), 1D array.
-        df:        DataFrame sa ``group_col`` kolonom (isti redosled kao gore).
-        group_col: kolona za agregaciju (default: ``opstina_maticni_broj``).
-
-    Returns:
-        Dict metrika; kljucevi koji bi ispali NaN/inf (npr. prazan stratum)
-        se izostavljaju da MLflow logovanje ne pukne.
-        Dodajte ``cv_mean_val_r2`` i ``cv_std_val_r2`` iz ``fold_r2`` liste
-        pre logovanja.
-    """
+    # 13 OOF metrika; izbor i obrazlozenje su u README, odeljak Metrike. oof_pred je u
+    # stanovnicima, ne u log prostoru. Kljucevi koji bi ispali NaN se izostavljaju, da
+    # MLflow logovanje ne pukne.
     stvarno   = np.asarray(stvarno, dtype="float64")
     oof_pred  = np.clip(np.asarray(oof_pred, dtype="float64"), 0, None)
     ylog      = np.log1p(stvarno)
@@ -180,11 +123,7 @@ def metrike_runa(
     df: pd.DataFrame,
     group_col: str = "opstina_maticni_broj",
 ) -> dict:
-    """Po-fold CV R2 (prosek i rasipanje) plus pun skup OOF metrika.
-
-    Isti recnik se u svakom treniracom notebooku salje u ``mlflow.log_metrics``
-    i u ``cv_summary_figure``.
-    """
+    # Po-fold CV R2 (prosek i rasipanje) plus pun skup OOF metrika.
     return {
         "cv_mean_val_r2": float(np.mean(fold_r2)),
         "cv_std_val_r2":  float(np.std(fold_r2)),
@@ -193,7 +132,7 @@ def metrike_runa(
 
 
 def rezime_linija(agg: dict, label: str) -> str:
-    """Jednolinijski rezime runa za ispis na kraju notebooka."""
+    # Jednolinijski rezime runa za ispis na kraju notebooka.
     return (
         f"[{label}] CV R2 {agg['cv_mean_val_r2']:.3f} ± {agg['cv_std_val_r2']:.3f}"
         f" | OOF R2(log) {agg['oof_r2_log']:.3f}"
@@ -210,23 +149,7 @@ def kalibracija_figure(
     pristupi: list[str],
     kalibrisani: dict,
 ) -> plt.Figure:
-    """Efekat post-hoc kalibracije po pristupu, dva panela.
-
-    * Levo:  ``oof_kalib_nagib`` po pristupu, sirovo vs kalibrisano. Linija na
-      1.0 je cilj; nagib > 1 znaci da su predikcije stisnute ka sredini.
-    * Desno: ``oof_medape`` po pristupu, isto grupisanje - da li ispravljanje
-      skale zaista smanjuje tipicnu gresku ili samo pomera nagib.
-
-    Args:
-        stvarno:     stvarni broj stanovnika, 1D array.
-        df:          DataFrame sa ``pred_<pristup>`` kolonama (sirove OOF
-                     predikcije) i ``group_col``.
-        pristupi:    lista imena pristupa.
-        kalibrisani: ``{(pristup, metod): oof_pred}`` iz kalibracione petlje.
-
-    Returns:
-        ``matplotlib.figure.Figure``.
-    """
+    # Efekat kalibracije po pristupu: nagib levo, medAPE desno, sirovo vs kalibrisano.
     metodi = sorted({m for _, m in kalibrisani})
     serije = ["sirovo", *metodi]
 
@@ -269,29 +192,7 @@ def cv_summary_figure(
     group_col: str = "opstina_maticni_broj",
     label: str = "",
 ) -> plt.Figure:
-    """Standardni 2x2 CV rezime grafik.
-
-    Isti raspored u svim trima notebucima:
-
-    * Gore levo:  bar grafik best val R2 po foldu sa prosecnom linijom.
-    * Gore desno: tekstualni rezime metrika.
-    * Dole levo:  scatter stvarno vs predvidjeno po naselju (log skala).
-    * Dole desno: medAPE po velicinskim stratumima, sa brojem naselja po
-      stratumu iznad stubica.
-
-    Args:
-        fold_r2:   lista best val R2 po foldu.
-        agg:       dict metrika (iz ``oof_metrics`` + ``cv_mean/std_val_r2``).
-        stvarno:   stvarni broj stanovnika, 1D array.
-        oof_pred:  OOF predikcije u prostoru populacije, 1D array.
-        df:        DataFrame sa ``group_col`` kolonom.
-        group_col: kolona za agregaciju (default: ``opstina_maticni_broj``).
-        label:     kratka oznaka pristupa za naslove (npr. ``"footprint"``,
-                   ``"tiles"``, ``"sentinel"``).
-
-    Returns:
-        ``matplotlib.figure.Figure`` - proslediti ``mlflow.log_figure``.
-    """
+    # 2x2 CV rezime: R2 po foldu, metrike, scatter po naselju, medAPE po stratumima.
     oof_pred = np.clip(oof_pred, 0, None)
     stvarno = np.asarray(stvarno, dtype="float64")
 

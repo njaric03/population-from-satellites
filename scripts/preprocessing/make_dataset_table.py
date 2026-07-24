@@ -10,7 +10,7 @@ KOORDINATE_CRS = 4326      # WGS84, za lon/lat kolone uz projektovane cx/cy
 
 
 def ucitaj_naselja() -> gpd.GeoDataFrame:
-    """Geometrija naselja spojena sa labelom i sifrom okruga."""
+    # Geometrija naselja spojena sa labelom i sifrom okruga.
     naselja = gpd.read_file(config.NASELJA_GPKG)
     labele = pd.read_csv(config.NASELJE_POP)
     okruzi = pyogrio.read_dataframe(config.OPSTINE_GPKG, read_geometry=False)[
@@ -24,14 +24,9 @@ def ucitaj_naselja() -> gpd.GeoDataFrame:
 
 
 def centroidi(naselja: gpd.GeoDataFrame) -> tuple[gpd.GeoSeries, pd.Series]:
-    """Centroid po naselju, sa zamenom za konkavne oblike.
-
-    Kod konkavnog poligona centroid ume da padne izvan njega, pa bi isecak bio
-    centriran na tudje zemljiste. Takva naselja dobijaju
-    ``representative_point()``, koja je po definiciji unutar poligona.
-
-    Vraca (centroidi, maska naselja kojima je originalni centroid bio unutra).
-    """
+    # Centroid po naselju + maska onih kojima je pao unutar poligona. Kod konkavnog oblika
+    # centroid ume da padne izvan naselja, pa bi isecak bio centriran na tudje zemljiste;
+    # takvi dobijaju representative_point().
     cent = gpd.GeoSeries(naselja.geometry.centroid, crs=naselja.crs)
     unutra = cent.within(naselja.geometry)
     zamena = naselja.geometry.representative_point()
@@ -40,11 +35,7 @@ def centroidi(naselja: gpd.GeoDataFrame) -> tuple[gpd.GeoSeries, pd.Series]:
 
 
 def napravi_tabelu() -> tuple[pd.DataFrame, pd.Series]:
-    """Master tabela naselja: labela, grupisanje, povrsina i centroid.
-
-    Temelj za Sentinel isecke (cx, cy), rasterizaciju otisaka i GroupKFold
-    podelu (opstina / okrug). Vraca (tabela, maska ispravnih centroida).
-    """
+    # Master tabela: labela, grupisanje, povrsina, centroid (+ maska centroida).
     naselja = ucitaj_naselja()
     cent, unutra = centroidi(naselja)
     naselja["cx"] = cent.x.round(1)

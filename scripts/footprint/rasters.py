@@ -1,5 +1,3 @@
-import glob
-import os
 import sys
 
 import geopandas as gpd
@@ -23,11 +21,7 @@ FINI_RES_M = 10.0 / SUPERSAMPLE
 
 
 def sazmi(fini: np.ndarray, kako: str = "mean") -> np.ndarray:
-    """(FINI_PX, FINI_PX) -> (PX, PX), prosekom ili sumom po bloku.
-
-    Pokrivenost se saima prosekom (udeo celije pod zgradom), a brojanje
-    centroida sumom (koliko zgrada je palo u celiju).
-    """
+    # (FINI_PX, FINI_PX) -> (PX, PX): prosek za pokrivenost, suma za brojanje.
     blok = fini.reshape(PX, SUPERSAMPLE, PX, SUPERSAMPLE)
     sazeto = blok.mean(axis=(1, 3)) if kako == "mean" else blok.sum(axis=(1, 3))
     return sazeto.astype("float32")
@@ -35,12 +29,8 @@ def sazmi(fini: np.ndarray, kako: str = "mean") -> np.ndarray:
 
 def rasterizuj_naselje(zgrade: gpd.GeoDataFrame, prostorni_indeks,
                        cx: float, cy: float) -> np.ndarray:
-    """Dva kanala za prozor oko (cx, cy): pokrivenost i gustina zgrada.
-
-    Kanal 0 je udeo celije pod zgradom, kanal 1 broj centroida zgrada po celiji.
-    Drugi kanal razdvaja mnogo malih zgrada od nekoliko velikih, sto pokrivenost
-    sama ne vidi. Oba su iskljucivo iz geometrije.
-    """
+    # Dva kanala oko (cx, cy): udeo celije pod zgradom i broj centroida po celiji. Drugi
+    # kanal razdvaja mnogo malih zgrada od nekoliko velikih.
     prozor = box(cx - POLA_STRANE_M, cy - POLA_STRANE_M,
                  cx + POLA_STRANE_M, cy + POLA_STRANE_M)
     kandidati = zgrade.iloc[list(prostorni_indeks.query(prozor, predicate="intersects"))]
@@ -59,20 +49,15 @@ def rasterizuj_naselje(zgrade: gpd.GeoDataFrame, prostorni_indeks,
 
 
 def naselja_za_obradu() -> pd.DataFrame:
-    """Naselja koja imaju satelitski isecak; samo za njih ima smisla raster.
-
-    Fuzija trazi oba ulaza poravnata na isti prozor, pa naselje bez isecka ne
-    bi imalo par.
-    """
+    # Naselja sa satelitskim iseckom; bez para fuzija nema sta da spoji.
     tabela = pd.read_parquet(config.NASELJE_TABLE)
-    imaju_isecak = {int(os.path.splitext(os.path.basename(f))[0])
-                    for f in glob.glob(os.path.join(config.CUTOUTS, "*.npy"))}
+    imaju_isecak = {int(f.stem) for f in config.CUTOUTS.glob("*.npy")}
     return tabela[tabela.naselje_maticni_broj.isin(imaju_isecak)].copy()
 
 
 def ucitaj_zgrade(okrug: int) -> gpd.GeoDataFrame:
-    """Overture otisci jednog okruga, u metarskom CRS-u, sa centroidima."""
-    putanja = os.path.join(config.OVERTURE_OKRUG, f"okrug_{okrug}.parquet")
+    # Overture otisci jednog okruga, u metarskom CRS-u, sa centroidima.
+    putanja = config.OVERTURE_OKRUG / f"okrug_{okrug}.parquet"
     zgrade = gpd.read_parquet(putanja)
     if zgrade.crs is None:
         zgrade = zgrade.set_crs(CRS_STEPENI)
@@ -91,7 +76,7 @@ def main() -> None:
     napravljeno = 0
     for sifra in sorted(tabela.okrug_sifra.dropna().unique()):
         okrug = int(sifra)
-        if not os.path.exists(os.path.join(config.OVERTURE_OKRUG, f"okrug_{okrug}.parquet")):
+        if not (config.OVERTURE_OKRUG / f"okrug_{okrug}.parquet").exists():
             print(f"okrug {okrug}: nema parquet, preskacem")
             continue
 
@@ -99,8 +84,8 @@ def main() -> None:
         prostorni_indeks = zgrade.sindex
         for _, naselje in tabela[tabela.okrug_sifra == sifra].iterrows():
             maticni_broj = int(naselje.naselje_maticni_broj)
-            izlaz = os.path.join(config.FOOTPRINT_CUT, f"{maticni_broj}.npy")
-            if os.path.exists(izlaz):        # resumable: gotovo se ne racuna ponovo
+            izlaz = config.FOOTPRINT_CUT / f"{maticni_broj}.npy"
+            if izlaz.exists():               # resumable: gotovo se ne racuna ponovo
                 continue
             raster = rasterizuj_naselje(zgrade, prostorni_indeks,
                                         float(naselje.cx), float(naselje.cy))

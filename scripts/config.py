@@ -1,71 +1,59 @@
 import os
+from pathlib import Path
 
-# Databricks runtime uvek ima /databricks na disku.
-NA_DATABRICKSU: bool = os.path.isdir("/databricks")
+# Databricks runtime uvek ima /databricks na disku
+NA_DATABRICKSU: bool = Path("/databricks").is_dir()
 
 # UC Volume drzi i podatke i izlaze treninga; core.environment uzima isti koren
-VOLUME = "/Volumes/katalog/deep_learning/raw_data"
+VOLUME = Path("/Volumes/katalog/deep_learning/raw_data")
 
-KOREN   = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# ulazi i medjukoraci: Volume na Databricksu, data/ iz repoa lokalno
-DATA    = (VOLUME + "/data") if NA_DATABRICKSU else os.path.join(KOREN, "data")
-RESULTS = os.path.join(KOREN, "results")    # terminalne tabele i sazeci, u gitu
-FIGURES = os.path.join(KOREN, "figures")    # terminalne slike, u gitu
-
-
-def _p(*delovi: str) -> str:
-    """Putanja unutar DATA (os.path.join, pa radi i van Windowsa)."""
-    return os.path.join(DATA, *delovi)
+KOREN = Path(__file__).resolve().parent.parent
+DATA = VOLUME / "data" if NA_DATABRICKSU else KOREN / "data"   # ulazi i medjukoraci
+RESULTS = KOREN / "results"                                    # tabele i sazeci, u gitu
+FIGURES = KOREN / "figures"                                    # slike, u gitu
 
 
-def _tabela(ime: str) -> str:
-    """Tabela iz ``dataset/``, sa tolerancijom na ravan raspored.
-
-    Pipeline ih pise u ``DATA/dataset/``, ali na UC Volume-u stoje ravno u
-    ``DATA/``. Uzima se ona koja postoji, a ako nema nijedne ona pod
-    ``dataset/`` jer tamo ih pipeline pravi.
-    """
-    ugnjezdena = _p("dataset", ime)
-    ravna = _p(ime)
-    if not os.path.exists(ugnjezdena) and os.path.exists(ravna):
-        return ravna
-    return ugnjezdena
+def _tabela(ime: str) -> Path:
+    # pipeline pise u DATA/dataset/, na Volume-u stoje ravno u DATA/
+    ugnjezdena = DATA / "dataset" / ime
+    ravna = DATA / ime
+    return ravna if not ugnjezdena.exists() and ravna.exists() else ugnjezdena
 
 
 # --- sirovi ulazi (preuzeti spolja) ---------------------------------------
-NASELJA_GPKG   = _p("naselja", "naselje.gpkg")            # GeoSrbija RPJ
-OPSTINE_GPKG   = _p("opstine", "opstine.gpkg")            # GeoSrbija RPJ
-POPISNI_KRUG   = _p("popisnikrugovi", "popisni_krug.gpkg")
-RZS_XLSX       = _p("rzs", "ukupno_stanovnika_naselja.xlsx")   # Popis 2022
-SENTINEL_DIR   = _p("sentinel")                            # pojedinacni .tiff za EDA
+NASELJA_GPKG = DATA / "naselja" / "naselje.gpkg"               # GeoSrbija RPJ
+OPSTINE_GPKG = DATA / "opstine" / "opstine.gpkg"               # GeoSrbija RPJ
+POPISNI_KRUG = DATA / "popisnikrugovi" / "popisni_krug.gpkg"
+RZS_XLSX = DATA / "rzs" / "ukupno_stanovnika_naselja.xlsx"     # Popis 2022
+SENTINEL_DIR = DATA / "sentinel"                               # pojedinacni .tiff za EDA
 
 # --- medjukoraci (pravi ih pipeline, cita ih sledeci korak) ---------------
-NASELJE_POP    = _p("rzs", "naselje_pop_final.csv")        # preprocessing.build_labels
-DATASET_DIR    = _p("dataset")
-NASELJE_TABLE  = _tabela("naselje_table.parquet")          # preprocessing.make_dataset_table
-NASELJE_TABLE_CSV   = _tabela("naselje_table.csv")
-NASELJE_FOOTPRINTS  = _tabela("naselje_footprints.parquet")   # footprint.per_naselje
+NASELJE_POP = DATA / "rzs" / "naselje_pop_final.csv"           # preprocessing.build_labels
+DATASET_DIR = DATA / "dataset"
+NASELJE_TABLE = _tabela("naselje_table.parquet")               # preprocessing.make_dataset_table
+NASELJE_TABLE_CSV = _tabela("naselje_table.csv")
+NASELJE_FOOTPRINTS = _tabela("naselje_footprints.parquet")     # footprint.per_naselje
 NASELJE_FOOTPRINTS_CSV = _tabela("naselje_footprints.csv")
-TILES_INDEX    = _tabela("tiles_index.csv")                # sentinel.tiles
+TILES_INDEX = _tabela("tiles_index.csv")                       # sentinel.tiles
 
-OVERTURE_OKRUG = _p("overture_okrug")   # otisci po okrugu; ulaz za rasterizaciju i plocice
-OVERTURE_RURAL = _p("overture_rural")   # otisci uzorka sela (dijagnostika)
-OKRUG_COMP     = _p("okrug_comp")       # Sentinel kompoziti po okrugu
+OVERTURE_OKRUG = DATA / "overture_okrug"    # otisci po okrugu, ulaz za rastere i plocice
+OVERTURE_RURAL = DATA / "overture_rural"    # otisci uzorka sela (dijagnostika)
+OKRUG_COMP = DATA / "okrug_comp"            # Sentinel kompoziti po okrugu
 
-CUTOUTS        = _p("cutouts")           # 1 isecak po naselju (za multimodalnu fuziju F2)
-CUTOUTS_INDEX  = _p("cutouts", "index.csv")
-FOOTPRINT_CUT  = _p("footprint_cutouts")  # rasterizovani otisci (pristup 2)
-TILES          = _p("tiles")             # plocice 2.24 km (pristup 1)
+CUTOUTS = DATA / "cutouts"                  # 1 isecak po naselju (fuzija F2)
+CUTOUTS_INDEX = DATA / "cutouts" / "index.csv"
+FOOTPRINT_CUT = DATA / "footprint_cutouts"  # rasterizovani otisci (pristup 2)
+TILES = DATA / "tiles"                      # plocice 2.24 km (pristup 1)
 
 # --- terminalni izlazi (u gitu) -------------------------------------------
-RURAL_FOOTPRINTS = os.path.join(RESULTS, "rural_footprints.csv")   # footprint.coverage
-OVERTURE_POPUNJENOST = os.path.join(RESULTS, "overture_popunjenost_atributa.csv")
+RURAL_FOOTPRINTS = RESULTS / "rural_footprints.csv"            # footprint.coverage
+OVERTURE_POPUNJENOST = RESULTS / "overture_popunjenost_atributa.csv"
 
 
-def obezbedi(*putanje: str) -> None:
-    """Napravi direktorijume ako ne postoje."""
-    for p in putanje:
-        os.makedirs(p, exist_ok=True)
+def obezbedi(*putanje: Path) -> None:
+    # napravi direktorijume ako ne postoje
+    for putanja in putanje:
+        os.makedirs(putanja, exist_ok=True)
 
 
 # --- strukturirani atributi otisaka (pristup 2) ----------------------------

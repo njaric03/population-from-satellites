@@ -1,7 +1,9 @@
 import re
 import sys
 
-import pandas as pd, openpyxl, pyogrio
+import openpyxl
+import pandas as pd
+import pyogrio
 
 from scripts import config
 
@@ -20,23 +22,21 @@ BEZ_POPISA = {("ЦРНА ТРАВА", "ГРАДСКА")}
 
 
 def n_strip(s) -> str:
-    """Kljuc opstine: velika slova, bez zagrada i bez prefiksa ГРАД."""
+    # Kljuc opstine: velika slova, bez zagrada i bez prefiksa ГРАД.
     s = re.sub(r"\s*\(.*?\)\s*", " ", str(s))
     s = re.sub(r"\s+", " ", s.upper().replace("\n", " ")).strip()
     return re.sub(r"^ГРАД\s+", "", s)
 
 
 def n_plain(s) -> str:
-    """Kljuc naselja: velika slova, jedan razmak; zagrade ostaju."""
+    # Kljuc naselja: velika slova, jedan razmak; zagrade ostaju.
     return re.sub(r"\s+", " ", str(s).upper().replace("\n", " ")).strip()
 
 
 def ucitaj_rzs() -> pd.DataFrame:
-    """Popis 2022 (.xlsx) -> DataFrame (opstina, naselje, pop, k_op, k_na).
-
-    Tabela nema sifre, hijerarhija je samo u uvlacenju celije: indent 2 je
-    opstina, indent 4 naselje. Redovi "Градска"/"Остала" su medjuzbirovi.
-    """
+    # Popis 2022 (.xlsx) -> (opstina, naselje, pop, k_op, k_na). Tabela nema sifre;
+    # hijerarhija je u uvlacenju celije, indent 2 = opstina, indent 4 = naselje.
+    # "Градска"/"Остала" su medjuzbirovi.
     ws = openpyxl.load_workbook(config.RZS_XLSX, data_only=True)["Sheet1"]
     rows, cur = [], None
     for r in range(1, ws.max_row + 1):
@@ -61,7 +61,7 @@ def ucitaj_rzs() -> pd.DataFrame:
 
 
 def ucitaj_rpj() -> pd.DataFrame:
-    """GeoSrbija RPJ -> maticni broj i imena naselja (bez geometrije)."""
+    # GeoSrbija RPJ -> maticni broj i imena naselja (bez geometrije).
     g = pyogrio.read_dataframe(config.NASELJA_GPKG, read_geometry=False)[
         ["naselje_maticni_broj", "naselje_ime", "opstina_ime"]].copy()
     g["k_op"] = g.opstina_ime.map(n_strip)
@@ -70,15 +70,8 @@ def ucitaj_rpj() -> pd.DataFrame:
 
 
 def spoji_labele(rzs: pd.DataFrame = None, rpj: pd.DataFrame = None) -> pd.DataFrame:
-    """RPJ tabela sa dodatim kolonama ``pop`` i ``stage``, u tri koraka.
-
-    * stage 1 - par (opstina, naselje)
-    * stage 2 - samo ime naselja, i to samo ako je jedinstveno na obe strane
-    * stage 3 - ``RUCNI_CROSSWALK`` za pravopisne varijante
-
-    ``stage`` 0 znaci nespojeno; ``pop`` je tada NaN. Ne pise nista na disk
-    i ne stampa - dijagnostiku radi pozivalac (``main`` ili notebook).
-    """
+    # RPJ tabela sa dodatim pop i stage; stage 0 znaci nespojeno. Ne pise na disk i ne
+    # stampa, dijagnostika je na pozivaocu.
     rzs = ucitaj_rzs() if rzs is None else rzs
     g = (ucitaj_rpj() if rpj is None else rpj).copy()
 

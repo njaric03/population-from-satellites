@@ -1,7 +1,6 @@
-import glob
-import os
 import subprocess
 import sys
+from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
@@ -25,7 +24,7 @@ OPISNI_ATRIBUTI = ["num_floors", "height", "subtype", "class", "roof_shape"]
 
 
 def uzorkuj_sela() -> gpd.GeoDataFrame:
-    """Nasumican uzorak sela i depopulacionih naselja, sa fiksnim seed-om."""
+    # Nasumican uzorak sela i depopulacionih naselja, sa fiksnim seed-om.
     naselja = gpd.read_file(config.NASELJA_GPKG)
     labele = pd.read_csv(config.NASELJE_POP)
     naselja = naselja.merge(labele[["naselje_maticni_broj", "pop"]],
@@ -37,9 +36,9 @@ def uzorkuj_sela() -> gpd.GeoDataFrame:
     ])
 
 
-def preuzmi_otiske(granice, putanja: str) -> None:
-    """Overture otisci za bbox jednog naselja; preskace ako je vec kesirano."""
-    if os.path.exists(putanja):
+def preuzmi_otiske(granice, putanja: Path) -> None:
+    # Overture otisci za bbox jednog naselja; preskace ako je vec kesirano.
+    if putanja.exists():
         return
     zapad, jug, istok, sever = granice
     subprocess.run(
@@ -49,11 +48,7 @@ def preuzmi_otiske(granice, putanja: str) -> None:
 
 
 def prebroj_izvore(zgrade: gpd.GeoDataFrame) -> dict[str, int]:
-    """Koliko zgrada dolazi iz kog Overture izvora.
-
-    Kolona ``sources`` je lista recnika po zgradi; oblik ume da varira izmedju
-    izdanja, pa se preskace sve sto nije recnik sa kljucem ``dataset``.
-    """
+    # Koliko zgrada iz kog Overture izvora; sources je lista recnika po zgradi.
     if not len(zgrade) or "sources" not in zgrade.columns:
         return {}
     tally: dict[str, int] = {}
@@ -68,18 +63,16 @@ def prebroj_izvore(zgrade: gpd.GeoDataFrame) -> dict[str, int]:
 
 
 def pokrivenost_sela() -> pd.DataFrame:
-    """Po uzorkovanom naselju: broj zgrada, krovna povrsina i glavni izvor.
-
-    Provera rizika za pristup 2: ako su ML-generisani otisci retki u selima,
-    izgradjenost je nepouzdan signal bas tamo gde je populacija najmanja.
-    """
+    # Po uzorkovanom selu: broj zgrada, krovna povrsina, glavni izvor. Rizik za pristup 2:
+    # ako su otisci retki u selima, izgradjenost je nepouzdan signal bas tamo gde je
+    # populacija najmanja.
     uzorak = uzorkuj_sela()
     u_stepenima = uzorak.to_crs(CRS_STEPENI)
     redovi = []
 
     for indeks, naselje in uzorak.iterrows():
         poligon = u_stepenima.loc[indeks, "geometry"]
-        putanja = os.path.join(config.OVERTURE_RURAL, f"{naselje.naselje_maticni_broj}.parquet")
+        putanja = config.OVERTURE_RURAL / f"{naselje.naselje_maticni_broj}.parquet"
         try:
             preuzmi_otiske(poligon.bounds, putanja)
             zgrade = gpd.read_parquet(putanja)
@@ -104,21 +97,17 @@ def pokrivenost_sela() -> pd.DataFrame:
 
 
 def popunjenost_atributa() -> pd.DataFrame:
-    """Udeo popunjenih opisnih Overture kolona, po okrugu i ukupno.
-
-    Razlog zasto per_naselje racuna atribute iskljucivo iz geometrije: opisni
-    atributi su retki i, sto je gore, neravnomerno popunjeni. Gusce mapirani
-    okruzi su i urbaniji, pa bi popunjenost bila proksi za urbanost a ne za
-    izgradjenost. Vraca prazan DataFrame ako nema kesiranih okruga.
-    """
+    # Udeo popunjenih opisnih Overture kolona, po okrugu i ukupno. Zasto per_naselje racuna
+    # sve iz geometrije: ovi atributi su retki i neravnomerni, pa mere gustinu mapiranja a
+    # ne izgradjenost.
     redovi = []
-    for putanja in sorted(glob.glob(os.path.join(config.OVERTURE_OKRUG, "okrug_*.parquet"))):
+    for putanja in sorted(config.OVERTURE_OKRUG.glob("okrug_*.parquet")):
         try:
             zgrade = pd.read_parquet(putanja, columns=OPISNI_ATRIBUTI)
         except Exception as greska:
-            print(f"{os.path.basename(putanja)}: preskocen ({type(greska).__name__})")
+            print(f"{putanja.name}: preskocen ({type(greska).__name__})")
             continue
-        sifra = os.path.basename(putanja).replace("okrug_", "").replace(".parquet", "")
+        sifra = putanja.stem.replace("okrug_", "")
         red = {"okrug": sifra, "zgrada": len(zgrade)}
         for atribut in OPISNI_ATRIBUTI:
             red[atribut] = round(100 * float(zgrade[atribut].notna().mean()), 2)

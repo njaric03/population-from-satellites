@@ -2,7 +2,7 @@ from .data        import NW, Naselja, napravi_loadere, seed_worker, stats_po_ops
 from .train       import dvofazni_trening, prodji, seed_everything
 from .cv          import (GLAVNE_KOLONE, cv_summary_figure, kalibracija_figure,
                           metrike_runa, napravi_foldove, oof_metrics, rezime_linija)
-from .environment import NA_DATABRICKSU, izlazni_dir, podesi_mlflow, sacuvaj_oof
+from .environment import izlazni_dir, podesi_mlflow, sacuvaj_oof
 
 __all__ = [
     "NW",
@@ -20,7 +20,6 @@ __all__ = [
     "kalibracija_figure",
     "napravi_foldove",
     "oof_metrics",
-    "NA_DATABRICKSU",
     "izlazni_dir",
     "podesi_mlflow",
     "sacuvaj_oof",

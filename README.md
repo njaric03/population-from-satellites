@@ -34,9 +34,16 @@ veličinskim stratumima naselja i opštinska agregacija sa i bez dve najveće
 opštine.
 
 Skup je namerno sveden na 13 ključeva. Izostavljeni su `oof_rmse_log`
-(determinisana funkcija `oof_r2_log`), `oof_mae_log` (log jedinice se ne
-tumače), `oof_rmse_stanovnici` i linearni `oof_opstina_r2` (oba svodi Beograd
-na sebe). Detalji i obrazloženja u docstringu `core.cv.oof_metrics`.
+(determinisana funkcija `oof_r2_log`, varijansa je ista za sve pristupe),
+`oof_mae_log` (log jedinice se ne tumače), `oof_rmse_stanovnici` (kvadrat
+greške u stanovnicima ga svodi na Beograd), linearni `oof_opstina_r2` sa i bez
+top-2 (na rasponu opština 5k-1.6M ga nose ili ruše dva grada), i `oof_n_<strat>`
+sa `oof_mae_<strat>` (prvo opisuje skup a ne run, drugo samo ponavlja da velika
+naselja imaju velike apsolutne greške).
+
+Opštinska agregacija se računa sa i bez dve najveće opštine jer to razdvaja
+"model ne radi" od "megagradovi se ne ekstrapoliraju u GroupKFold-u", a medAPE
+po stratumima pokazuje gde model radi a gde ne. Računa ih `core.cv.oof_metrics`.
 
 Kompresiju predikcija ka sredini ispravlja post-hoc kalibracija u
 `05_fusion_train`: za **svaki** pristup, pod istim foldovima, uči se monotona
@@ -50,15 +57,15 @@ core/                  zajednicki modul (uvoze ga svi treniracki notebooci)
   data.py              normalizacija po opsegu, Dataset, DataLoader-i
   train.py             seeding, trening/eval prolaz, dvofazni trening (glava -> fine-tuning)
   cv.py                GroupKFold foldovi, OOF metrike, CV rezime grafik
-  environment.py       detekcija Databricks/lokalno, MLflow tracking, izlazni dir, cuvanje OOF-a
+  environment.py       MLflow tracking, izlazni dir, cuvanje OOF-a (koren okruzenja iz scripts/config.py)
 notebooks/             Jupyter notebooci; prefiks = redosled pokretanja
   01_eda.ipynb              analiza podataka: jedinice, populacija, footprinti, snimci
-  02_tiles_train.ipynb      pristup 1 (plocice + agregaciona loss, log vs linear)
+  02_tiles_train.ipynb      pristup 1 (plocice + agregacioni loss, log vs linear)
   03_footprint_train.ipynb  pristup 2 (tabelarni MLP + GBM referenca) i 2b (CNN nad rasterom)
   04_multimodal_train.ipynb fuzija F2 (zajednicki trogranski model: 2 slike + atributi)
   05_fusion_train.ipynb     fuzija F1 (stacking nad OOF predikcijama 02-04)
 scripts/               priprema podataka (lokalno; paket, pokrece se sa -m)
-  config.py            sve putanje projekta na jednom mestu; uvoze ga ostale skripte
+  config.py            sve putanje i detekcija okruzenja; uvoze ga skripte, notebooci i core
   preprocessing/       labele i master tabela naselja, zajednicko svim pristupima
   sentinel/            satelitski ulazi: kompoziti, isecci (za F2), plocice (pristup 1)
   footprint/           otisci zgrada: strukturirani atributi (pristup 2),

@@ -1,6 +1,6 @@
-import os
 import subprocess
 import sys
+from pathlib import Path
 
 import geopandas as gpd
 import numpy as np
@@ -21,7 +21,7 @@ ATRIBUTI = config.FP_AGREGIRANI      # spisak atributa i zasto bas ti: config.py
 
 
 def ucitaj_naselja() -> gpd.GeoDataFrame:
-    """Geometrija naselja sa pridruzenom sifrom okruga (petlja ide po okrugu)."""
+    # Geometrija naselja sa pridruzenom sifrom okruga (petlja ide po okrugu).
     naselja = gpd.read_file(config.NASELJA_GPKG)[
         ["naselje_maticni_broj", "opstina_maticni_broj", "geometry"]]
     okruzi = pyogrio.read_dataframe(config.OPSTINE_GPKG, read_geometry=False)[
@@ -29,9 +29,9 @@ def ucitaj_naselja() -> gpd.GeoDataFrame:
     return naselja.merge(okruzi, on="opstina_maticni_broj", how="left")
 
 
-def preuzmi_otiske(naselja_okruga: gpd.GeoDataFrame, putanja: str) -> None:
-    """Skine Overture otiske za bbox okruga, ako fajl vec ne postoji."""
-    if os.path.exists(putanja):
+def preuzmi_otiske(naselja_okruga: gpd.GeoDataFrame, putanja: Path) -> None:
+    # Skine Overture otiske za bbox okruga, ako fajl vec ne postoji.
+    if putanja.exists():
         return
     zapad, jug, istok, sever = naselja_okruga.to_crs(CRS_STEPENI).total_bounds
     subprocess.run(
@@ -41,12 +41,9 @@ def preuzmi_otiske(naselja_okruga: gpd.GeoDataFrame, putanja: str) -> None:
 
 
 def geometrijski_atributi(zgrade: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-    """Po zgradi: povrsina, kompaktnost, oznaka velike, i mere rasporeda.
-
-    Rastojanje do najblize zgrade i broj suseda se racunaju nad SVIM zgradama
-    okruga, ne po naselju: susedstvo ne staje na granici naselja, pa bi zgrada
-    tik uz granicu inace ispala usamljena.
-    """
+    # Po zgradi: povrsina, kompaktnost, oznaka velike, mere rasporeda. Rastojanje i broj
+    # suseda idu nad SVIM zgradama okruga, ne po naselju: inace bi zgrada tik uz granicu
+    # naselja ispala usamljena.
     zgrade = zgrade.to_crs(CRS_METRI)
     zgrade["ba"] = zgrade.geometry.area
     zgrade["compact"] = (4 * np.pi * zgrade["ba"]) / zgrade.geometry.length.clip(lower=1.0) ** 2
@@ -63,7 +60,7 @@ def geometrijski_atributi(zgrade: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 
 def agregiraj_po_naselju(zgrade: gpd.GeoDataFrame,
                          naselja_okruga: gpd.GeoDataFrame) -> pd.DataFrame:
-    """Zgrade svrstane u naselja po centroidu, pa svedene na atribute naselja."""
+    # Zgrade svrstane u naselja po centroidu, pa svedene na atribute naselja.
     kolone = ["ba", "compact", "velika", "nn_dist", "n_50m"]
     tacke = gpd.GeoDataFrame(zgrade[kolone].copy(),
                              geometry=zgrade["centroid"], crs=CRS_METRI)
@@ -84,12 +81,7 @@ def agregiraj_po_naselju(zgrade: gpd.GeoDataFrame,
 
 
 def atributi_po_okruzima(naselja: gpd.GeoDataFrame) -> tuple[pd.DataFrame, list[int]]:
-    """Petlja po okruzima; vraca (spojeni atributi, sifre okruga koji su pali).
-
-    Ide okrug po okrug jer sve zgrade Srbije odjednom ne staju u memoriju.
-    Okrug koji padne (preuzimanje, ostecen parquet) ne prekida ostale, ali se
-    vraca u listi da delimican rezultat ne prodje nezapazeno.
-    """
+    # (atributi, sifre palih okruga). Ide okrug po okrug, sve zgrade ne staju u RAM.
     delovi, pali = [], []
     sifre = sorted(naselja.okrug_sifra.dropna().unique().tolist())
     print("okruga:", len(sifre))
@@ -98,7 +90,7 @@ def atributi_po_okruzima(naselja: gpd.GeoDataFrame) -> tuple[pd.DataFrame, list[
         okrug = int(sifra)
         naselja_okruga = naselja[naselja.okrug_sifra == sifra][
             ["naselje_maticni_broj", "geometry"]]
-        putanja = os.path.join(config.OVERTURE_OKRUG, f"okrug_{okrug}.parquet")
+        putanja = config.OVERTURE_OKRUG / f"okrug_{okrug}.parquet"
         try:
             preuzmi_otiske(naselja_okruga, putanja)
             zgrade = gpd.read_parquet(putanja)
@@ -122,7 +114,7 @@ def atributi_po_okruzima(naselja: gpd.GeoDataFrame) -> tuple[pd.DataFrame, list[
 
 
 def spoji_sa_tabelom(atributi: pd.DataFrame) -> pd.DataFrame:
-    """Atributi pridruzeni master tabeli, sa izvedenim gustinama."""
+    # Atributi pridruzeni master tabeli, sa izvedenim gustinama.
     tabela = pd.read_parquet(config.NASELJE_TABLE)
     spojeno = tabela.merge(atributi, on="naselje_maticni_broj", how="left")
 
@@ -140,7 +132,7 @@ def spoji_sa_tabelom(atributi: pd.DataFrame) -> pd.DataFrame:
 
 
 def stampaj_rezime(spojeno: pd.DataFrame) -> None:
-    """Korelacije atributa sa populacijom, provera da signal uopste postoji."""
+    # Korelacije atributa sa populacijom, provera da signal uopste postoji.
     bez_zgrada = int((spojeno.n_buildings == 0).sum())
     sa_zgradama = spojeno[spojeno.n_buildings > 0]
     korelacija = float("nan")

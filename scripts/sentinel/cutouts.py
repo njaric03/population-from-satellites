@@ -1,6 +1,6 @@
 import argparse
-import os
 import sys
+from pathlib import Path
 import time
 
 import geopandas as gpd
@@ -29,7 +29,7 @@ OPENEO_HOST = "openeo.dataspace.copernicus.eu"
 
 
 def ucitaj_naselja() -> gpd.GeoDataFrame:
-    """Geometrija naselja sa sifrom okruga, centroidom i labelom."""
+    # Geometrija naselja sa sifrom okruga, centroidom i labelom.
     naselja = gpd.read_file(config.NASELJA_GPKG)[
         ["naselje_maticni_broj", "opstina_maticni_broj", "geometry"]]
     okruzi = pyogrio.read_dataframe(config.OPSTINE_GPKG, read_geometry=False)[
@@ -41,7 +41,7 @@ def ucitaj_naselja() -> gpd.GeoDataFrame:
 
 
 def izaberi_okruge(naselja: gpd.GeoDataFrame, rezim: str) -> list:
-    """Okruzi za obradu prema rezimu: najmanji jedan, fiksni podskup ili svi."""
+    # Okruzi za obradu prema rezimu: najmanji jedan, fiksni podskup ili svi.
     sve = sorted(naselja.okrug_sifra.dropna().unique().tolist())
     if rezim == "test":
         def povrsina_bboxa(sifra):
@@ -53,8 +53,8 @@ def izaberi_okruge(naselja: gpd.GeoDataFrame, rezim: str) -> list:
     return sve
 
 
-def ispravan_tiff(putanja: str) -> bool:
-    """Da li se GTiff otvara i cita; prekinut download ostavi fajl koji puca."""
+def ispravan_tiff(putanja: Path) -> bool:
+    # Da li se GTiff otvara i cita; prekinut download ostavi fajl koji puca.
     try:
         with rasterio.open(putanja) as dataset:
             dataset.read(1, window=Window(0, 0, 1, 1))
@@ -64,7 +64,7 @@ def ispravan_tiff(putanja: str) -> bool:
 
 
 def povezi_se():
-    """openEO veza sa autentikacijom; zove se tek kad kompozit stvarno fali."""
+    # openEO veza sa autentikacijom; zove se tek kad kompozit stvarno fali.
     import openeo
     veza = openeo.connect(OPENEO_HOST)
     veza.authenticate_oidc()
@@ -72,11 +72,8 @@ def povezi_se():
     return veza
 
 
-def preuzmi_kompozit(veza, naselja_okruga: gpd.GeoDataFrame, putanja: str, okrug: int) -> bool:
-    """Medijan kompozit okruga preko openEO batch posla. Vraca da li je uspelo.
-
-    Jedan posao po okrugu umesto poziva po naselju: 25 poslova umesto 4720.
-    """
+def preuzmi_kompozit(veza, naselja_okruga: gpd.GeoDataFrame, putanja: Path, okrug: int) -> bool:
+    # Medijan kompozit okruga preko openEO batch posla; 25 poslova umesto 4720.
     zapad, jug, istok, sever = naselja_okruga.total_bounds
     opseg = {"west": zapad - REZERVA_M, "south": jug - REZERVA_M,
              "east": istok + REZERVA_M, "north": sever + REZERVA_M,
@@ -98,14 +95,14 @@ def preuzmi_kompozit(veza, naselja_okruga: gpd.GeoDataFrame, putanja: str, okrug
         except Exception as greska:
             print(f"okrug {okrug} pokusaj {pokusaj + 1} pao: "
                   f"{type(greska).__name__}: {greska}", flush=True)
-        if os.path.exists(putanja):
-            os.remove(putanja)
+        if putanja.exists():
+            putanja.unlink()
         time.sleep(PAUZA_S)
     return False
 
 
 def iseci_naselje(kompozit, cx: float, cy: float) -> np.ndarray:
-    """Isecak (OPSEZI, PX, PX) oko centroida, dopunjen nulama do pune velicine."""
+    # Isecak (OPSEZI, PX, PX) oko centroida, dopunjen nulama do pune velicine.
     prozor = from_bounds(cx - POLA_STRANE_M, cy - POLA_STRANE_M,
                          cx + POLA_STRANE_M, cy + POLA_STRANE_M, kompozit.transform)
     procitano = kompozit.read(window=prozor, boundless=True, fill_value=0).astype("int16")
@@ -115,9 +112,9 @@ def iseci_naselje(kompozit, cx: float, cy: float) -> np.ndarray:
     return isecak
 
 
-def iseci_okrug(putanja_kompozita: str, naselja_okruga: gpd.GeoDataFrame,
+def iseci_okrug(putanja_kompozita: Path, naselja_okruga: gpd.GeoDataFrame,
                 gotova: set[int]) -> list[dict]:
-    """Isecci za sva naselja okruga koja jos nisu u indeksu."""
+    # Isecci za sva naselja okruga koja jos nisu u indeksu.
     redovi = []
     with rasterio.open(putanja_kompozita) as kompozit:
         for _, naselje in naselja_okruga.iterrows():
@@ -125,7 +122,7 @@ def iseci_okrug(putanja_kompozita: str, naselja_okruga: gpd.GeoDataFrame,
             if maticni_broj in gotova:
                 continue
             isecak = iseci_naselje(kompozit, float(naselje.cx), float(naselje.cy))
-            np.save(os.path.join(config.CUTOUTS, f"{maticni_broj}.npy"), isecak)
+            np.save(config.CUTOUTS / f"{maticni_broj}.npy", isecak)
             redovi.append({
                 "naselje_maticni_broj": maticni_broj,
                 "pop": int(naselje["pop"]),
@@ -150,7 +147,7 @@ def main() -> None:
     print("okruzi za obradu:", [int(k) for k in okruzi], flush=True)
 
     gotova = set()
-    if os.path.exists(config.CUTOUTS_INDEX):
+    if config.CUTOUTS_INDEX.exists():
         gotova = set(pd.read_csv(config.CUTOUTS_INDEX).naselje_maticni_broj)
     print("vec gotovo naselja:", len(gotova), flush=True)
 
@@ -159,27 +156,27 @@ def main() -> None:
     for sifra in okruzi:
         okrug = int(sifra)
         naselja_okruga = naselja[naselja.okrug_sifra == sifra]
-        putanja = os.path.join(config.OKRUG_COMP, f"okrug_{okrug}.tiff")
+        putanja = config.OKRUG_COMP / f"okrug_{okrug}.tiff"
         merenje = time.time()
 
-        if os.path.exists(putanja) and not ispravan_tiff(putanja):
+        if putanja.exists() and not ispravan_tiff(putanja):
             print(f"okrug {okrug}: neispravan kompozit -> brisem", flush=True)
-            os.remove(putanja)
-        if not os.path.exists(putanja):
+            putanja.unlink()
+        if not putanja.exists():
             if veza is None:            # veza se otvara tek kad neki kompozit fali
                 veza = povezi_se()
             if not preuzmi_kompozit(veza, naselja_okruga, putanja, okrug):
                 print(f"okrug {okrug} PRESKOCEN ({POKUSAJA} pokusaja)", flush=True)
                 continue
             print(f"okrug {okrug}: kompozit {time.time() - merenje:.0f}s, "
-                  f"{os.path.getsize(putanja) / 1e6:.0f}MB", flush=True)
+                  f"{putanja.stat().st_size / 1e6:.0f}MB", flush=True)
 
         redovi = iseci_okrug(putanja, naselja_okruga, gotova)
         if redovi:
             # indeks se dopisuje po okrugu, pa prekid ne gubi vec obradjene okruge
             pd.DataFrame(redovi).to_csv(
                 config.CUTOUTS_INDEX, mode="a",
-                header=not os.path.exists(config.CUTOUTS_INDEX),
+                header=not config.CUTOUTS_INDEX.exists(),
                 index=False, encoding="utf-8-sig")
             gotova.update(red["naselje_maticni_broj"] for red in redovi)
             ukupno += len(redovi)

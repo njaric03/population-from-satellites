@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 import random
-from typing import Optional
 
 import numpy as np
 import torch
@@ -13,18 +12,8 @@ NW: int = min(8, (os.cpu_count() or 2))
 
 
 def stats_po_opsegu(paths: list[str]) -> tuple[np.ndarray, np.ndarray]:
-    """Per-channel mean i std iz uzorka .npy fajlova.
-
-    Pozivati SAMO nad trening skupom tekuceg folda (bez curenja u validaciju).
-
-    Args:
-        paths: lista putanja ka .npy fajlovima (cutout-i ili otisci zgrada ili
-               plocice - bilo koja lista; tiles_train prosledjuje uniju svih
-               putanja plocica trening naselja tekuceg folda).
-
-    Returns:
-        mean, std - oba oblika (1, C, 1, 1), dtype float32.
-    """
+    # Per-channel mean i std, oblika (1, C, 1, 1). Zvati SAMO nad trening skupom tekuceg
+    # folda, inace curi u validaciju.
     uzorak = np.stack(
         [np.load(p) for p in random.sample(paths, min(400, len(paths)))]
     ).astype("float32")
@@ -34,13 +23,7 @@ def stats_po_opsegu(paths: list[str]) -> tuple[np.ndarray, np.ndarray]:
 
 
 class Naselja(Dataset):
-    """PyTorch Dataset za pristupe sa jednim .npy fajlom po naselju.
-
-    ``frame`` mora imati kolone:
-
-    * ``path``  - apsolutna putanja ka .npy fajlu
-    * ``y``     - float32 ciljna velicina (npr. ``log1p(pop)``)
-    """
+    # Dataset za jedan .npy po naselju; frame treba kolone path i y.
 
     def __init__(
         self,
@@ -73,12 +56,7 @@ class Naselja(Dataset):
 
 
 def seed_worker(wid: int, seed: int = 42) -> None:
-    """Inicijalizator radnika DataLoader-a za reproduktivnost.
-
-    Prosledjuje se kao ``worker_init_fn`` u DataLoader.
-    Beleska: da bismo preneli seed, bice kreiran closure - videti
-    ``napravi_loadere`` za primer.
-    """
+    # worker_init_fn za DataLoader; seed se prenosi kroz closure.
     s = seed + wid
     np.random.seed(s)
     random.seed(s)
@@ -90,23 +68,8 @@ def napravi_loadere(
     batch_size: int,
     seed: int = 42,
 ) -> tuple[DataLoader, DataLoader]:
-    """Pravi ``(train_dl, val_dl)`` iz DataFrame-ova koji vec imaju kolone
-    ``path`` i ``y``.
-
-    Normalizacija se racuna SAMO iz ``train_frame`` ovog folda
-    (nema curenja u validaciju). Briga o koloni ``y`` je na pozivaocu:
-    npr. ``frame["y"] = np.log1p(frame["pop"]).astype("float32")``
-    pre poziva ove funkcije.
-
-    Args:
-        train_frame:  trening DataFrame; mora imati ``path`` i ``y``.
-        val_frame:    validacioni DataFrame; mora imati ``path`` i ``y``.
-        batch_size:   velicina batch-a.
-        seed:         seed za DataLoader Generator i radnike.
-
-    Returns:
-        ``(train_dl, val_dl)``
-    """
+    # (train_dl, val_dl); normalizacija se racuna samo iz trening folda. Kolonu y postavlja
+    # pozivalac, npr. np.log1p(frame["pop"]).
     mean, std = stats_po_opsegu(train_frame.path.tolist())
 
     def _sw(wid: int) -> None:
