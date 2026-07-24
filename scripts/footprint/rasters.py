@@ -1,59 +1,115 @@
-import os, glob
-import numpy as np, pandas as pd, geopandas as gpd
-from shapely.geometry import box
+import glob
+import os
+import sys
+
+import geopandas as gpd
+import numpy as np
+import pandas as pd
 from rasterio.features import rasterize, MergeAlg
 from rasterio.transform import from_origin
+from shapely.geometry import box
 
 from scripts import config
 
-OKR = config.OVERTURE_OKRUG
-OUT = config.FOOTPRINT_CUT; config.obezbedi(OUT)
+CRS_METRI = 32634
+CRS_STEPENI = 4326
+
 # isti 224px @10m prozor oko centroida kao satelitski cutout (poravnato za fuziju)
-PX, H, SUB = 224, 1120, 4          # 224 px, pola strane 1120 m, 4x supersample (2.5 m)
-FPX, RES = PX * SUB, 10.0 / SUB
+PX = 224                  # strana rastera u pikselima
+POLA_STRANE_M = 1120      # pola strane prozora u metrima (224 px * 10 m / 2)
+SUPERSAMPLE = 4           # rasterizuje se 4x finije pa se sazima, da udeo bude gladak
+FINI_PX = PX * SUPERSAMPLE
+FINI_RES_M = 10.0 / SUPERSAMPLE
 
-tab = pd.read_parquet(config.NASELJE_TABLE)   # ima okrug_sifra
-imaju_cutout = {int(os.path.splitext(os.path.basename(f))[0]) for f in glob.glob(config.CUTOUTS + r"\*.npy")}
-tab = tab[tab.naselje_maticni_broj.isin(imaju_cutout)].copy()
-print("naselja za rasterizaciju:", len(tab))
 
-def downsample(fine, kako="mean"):    # (FPX,FPX) -> (PX,PX)
-    blok = fine.reshape(PX, SUB, PX, SUB)
-    return (blok.mean(axis=(1, 3)) if kako == "mean" else blok.sum(axis=(1, 3))).astype("float32")
+def sazmi(fini: np.ndarray, kako: str = "mean") -> np.ndarray:
+    """(FINI_PX, FINI_PX) -> (PX, PX), prosekom ili sumom po bloku.
 
-done = 0
-for k in sorted(tab.okrug_sifra.dropna().unique()):
-    fp = f"{OKR}\\okrug_{int(k)}.parquet"
-    if not os.path.exists(fp):
-        print(f"okrug {int(k)}: nema parquet, preskacem"); continue
-    b = gpd.read_parquet(fp)
-    if b.crs is None: b = b.set_crs(4326)
-    b = b.to_crs(32634)
-    b["centroid"] = b.geometry.centroid
-    sidx = b.sindex
-    sub_tab = tab[tab.okrug_sifra == k]
-    for _, r in sub_tab.iterrows():
-        mb = int(r.naselje_maticni_broj)
-        outp = f"{OUT}\\{mb}.npy"
-        if os.path.exists(outp): continue
-        cx, cy = float(r.cx), float(r.cy)
-        west, north = cx - H, cy + H
-        wbox = box(cx - H, cy - H, cx + H, cy + H)
-        cand = b.iloc[list(sidx.query(wbox, predicate="intersects"))]
-        tr = from_origin(west, north, RES, RES)
-        if len(cand):
-            # kanal 1: pokrivenost - udeo celije pod zgradom
-            cov = rasterize(((g, 1.0) for g in cand.geometry), out_shape=(FPX, FPX),
-                            transform=tr, fill=0, all_touched=False, dtype="float32")
-            # kanal 2: gustina zgrada - broj centroida po celiji. Razdvaja mnogo malih
-            # zgrada od nekoliko velikih, sto pokrivenost sama ne vidi.
-            cnt = rasterize(((g, 1.0) for g in cand["centroid"]), out_shape=(FPX, FPX),
-                            transform=tr, fill=0, merge_alg=MergeAlg.add, dtype="float32")
-            arr = np.stack([downsample(cov, "mean"), downsample(cnt, "sum")])
-        else:
-            arr = np.zeros((2, PX, PX), dtype="float32")
-        np.save(outp, arr)
-        done += 1
-    print(f"okrug {int(k)}: gotovo, ukupno {done}", flush=True)
+    Pokrivenost se saima prosekom (udeo celije pod zgradom), a brojanje
+    centroida sumom (koliko zgrada je palo u celiju).
+    """
+    blok = fini.reshape(PX, SUPERSAMPLE, PX, SUPERSAMPLE)
+    sazeto = blok.mean(axis=(1, 3)) if kako == "mean" else blok.sum(axis=(1, 3))
+    return sazeto.astype("float32")
 
-print(f"DONE: {done} footprint rastera u {OUT}")
+
+def rasterizuj_naselje(zgrade: gpd.GeoDataFrame, prostorni_indeks,
+                       cx: float, cy: float) -> np.ndarray:
+    """Dva kanala za prozor oko (cx, cy): pokrivenost i gustina zgrada.
+
+    Kanal 0 je udeo celije pod zgradom, kanal 1 broj centroida zgrada po celiji.
+    Drugi kanal razdvaja mnogo malih zgrada od nekoliko velikih, sto pokrivenost
+    sama ne vidi. Oba su iskljucivo iz geometrije.
+    """
+    prozor = box(cx - POLA_STRANE_M, cy - POLA_STRANE_M,
+                 cx + POLA_STRANE_M, cy + POLA_STRANE_M)
+    kandidati = zgrade.iloc[list(prostorni_indeks.query(prozor, predicate="intersects"))]
+    if not len(kandidati):
+        return np.zeros((2, PX, PX), dtype="float32")
+
+    transformacija = from_origin(cx - POLA_STRANE_M, cy + POLA_STRANE_M,
+                                 FINI_RES_M, FINI_RES_M)
+    pokrivenost = rasterize(((g, 1.0) for g in kandidati.geometry),
+                            out_shape=(FINI_PX, FINI_PX), transform=transformacija,
+                            fill=0, all_touched=False, dtype="float32")
+    broj_zgrada = rasterize(((g, 1.0) for g in kandidati["centroid"]),
+                            out_shape=(FINI_PX, FINI_PX), transform=transformacija,
+                            fill=0, merge_alg=MergeAlg.add, dtype="float32")
+    return np.stack([sazmi(pokrivenost, "mean"), sazmi(broj_zgrada, "sum")])
+
+
+def naselja_za_obradu() -> pd.DataFrame:
+    """Naselja koja imaju satelitski isecak; samo za njih ima smisla raster.
+
+    Fuzija trazi oba ulaza poravnata na isti prozor, pa naselje bez isecka ne
+    bi imalo par.
+    """
+    tabela = pd.read_parquet(config.NASELJE_TABLE)
+    imaju_isecak = {int(os.path.splitext(os.path.basename(f))[0])
+                    for f in glob.glob(os.path.join(config.CUTOUTS, "*.npy"))}
+    return tabela[tabela.naselje_maticni_broj.isin(imaju_isecak)].copy()
+
+
+def ucitaj_zgrade(okrug: int) -> gpd.GeoDataFrame:
+    """Overture otisci jednog okruga, u metarskom CRS-u, sa centroidima."""
+    putanja = os.path.join(config.OVERTURE_OKRUG, f"okrug_{okrug}.parquet")
+    zgrade = gpd.read_parquet(putanja)
+    if zgrade.crs is None:
+        zgrade = zgrade.set_crs(CRS_STEPENI)
+    zgrade = zgrade.to_crs(CRS_METRI)
+    zgrade["centroid"] = zgrade.geometry.centroid
+    return zgrade
+
+
+def main() -> None:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    config.obezbedi(config.FOOTPRINT_CUT)
+
+    tabela = naselja_za_obradu()
+    print("naselja za rasterizaciju:", len(tabela))
+
+    napravljeno = 0
+    for sifra in sorted(tabela.okrug_sifra.dropna().unique()):
+        okrug = int(sifra)
+        if not os.path.exists(os.path.join(config.OVERTURE_OKRUG, f"okrug_{okrug}.parquet")):
+            print(f"okrug {okrug}: nema parquet, preskacem")
+            continue
+
+        zgrade = ucitaj_zgrade(okrug)
+        prostorni_indeks = zgrade.sindex
+        for _, naselje in tabela[tabela.okrug_sifra == sifra].iterrows():
+            maticni_broj = int(naselje.naselje_maticni_broj)
+            izlaz = os.path.join(config.FOOTPRINT_CUT, f"{maticni_broj}.npy")
+            if os.path.exists(izlaz):        # resumable: gotovo se ne racuna ponovo
+                continue
+            raster = rasterizuj_naselje(zgrade, prostorni_indeks,
+                                        float(naselje.cx), float(naselje.cy))
+            np.save(izlaz, raster)
+            napravljeno += 1
+        print(f"okrug {okrug}: gotovo, ukupno {napravljeno}", flush=True)
+
+    print(f"DONE: {napravljeno} footprint rastera u {config.FOOTPRINT_CUT}")
+
+
+if __name__ == "__main__":
+    main()

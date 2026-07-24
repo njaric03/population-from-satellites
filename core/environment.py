@@ -5,23 +5,21 @@ import os
 import numpy as np
 import pandas as pd
 
-# Databricks runtime uvek ima /databricks na disku.
-NA_DATABRICKSU: bool = os.path.isdir("/databricks")
+# Koren okruzenja stoji u scripts.config, da postoji tacno jedna definicija.
+# config uvozi samo os, pa ovo ne povlaci nista tesko.
+from scripts.config import NA_DATABRICKSU, VOLUME
 
-VOLUME_OUT = "/Volumes/katalog/deep_learning/raw_data"
 EXPERIMENT = "/Users/korisnik/procena_stanovnika"
 
 
 def izlazni_dir() -> str:
     """Direktorijum za tezine modela i OOF parquet fajlove.
 
-    Databricks: UC Volume. Lokalno: ``out/``.
+    Databricks: UC Volume. Lokalno: ``out/``. Ulazni podaci idu preko
+    ``scripts.config`` (``config.DATA`` i imenovane putanje).
     Kreira direktorijum ako ne postoji.
     """
-    if NA_DATABRICKSU:
-        out = VOLUME_OUT
-    else:
-        out = "out"
+    out = VOLUME if NA_DATABRICKSU else "out"
     os.makedirs(out, exist_ok=True)
     return out
 

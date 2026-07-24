@@ -50,6 +50,11 @@ STRATUM_GRANICE = [0, 500, 5_000, 50_000, np.inf]
 STRATUM_OZNAKE  = ["do_500", "500_5k", "5k_50k", "50k_plus"]
 
 
+def _fmt(agg: dict, kljuc: str, fmt: str = ".3f") -> str:
+    """Metrika za ispis, ili "n/a" ako je oof_metrics nije vratio."""
+    return format(agg[kljuc], fmt) if kljuc in agg else "n/a"
+
+
 def oof_metrics(
     stvarno: np.ndarray,
     oof_pred: np.ndarray,
@@ -115,7 +120,7 @@ def oof_metrics(
         .sum()
     )
 
-    m = {
+    metrike = {
         "oof_r2_log":          float(r2_score(ylog, plog)),
         "oof_mae_stanovnici":  float(mean_absolute_error(stvarno, oof_pred)),
         "oof_mediana_ae":      float(np.median(abs_gres)),
@@ -127,21 +132,21 @@ def oof_metrics(
     # relativne greske: definisane samo za pop > 0 (u skupu ima naselja sa 0)
     poz = stvarno > 0
     if poz.any():
-        m["oof_medape"] = float(np.median(abs_gres[poz] / stvarno[poz]))
+        metrike["oof_medape"] = float(np.median(abs_gres[poz] / stvarno[poz]))
     if stvarno.sum() > 0:
-        m["oof_wmape"] = float(abs_gres.sum() / stvarno.sum())
-        m["oof_bias"]  = float(oof_pred.sum() / stvarno.sum())
+        metrike["oof_wmape"] = float(abs_gres.sum() / stvarno.sum())
+        metrike["oof_bias"]  = float(oof_pred.sum() / stvarno.sum())
 
     # kalibracioni nagib: log1p(true) ~ log1p(pred); degenerisan ako su
     # predikcije ~konstantne (std ~ 0)
     if float(np.std(plog)) > 1e-9:
         nagib, _ = np.polyfit(plog, ylog, 1)
-        m["oof_kalib_nagib"] = float(nagib)
+        metrike["oof_kalib_nagib"] = float(nagib)
 
     # opstina agregacija bez dve najvece opstine (po stvarnoj populaciji)
     if len(po_grupi) > 4:
         bez_top2 = po_grupi.drop(po_grupi.stvarno.nlargest(2).index)
-        m["oof_opstina_r2_log_bez_top2"] = float(
+        metrike["oof_opstina_r2_log_bez_top2"] = float(
             r2_score(np.log1p(bez_top2.stvarno), np.log1p(bez_top2.pred))
         )
 
@@ -153,11 +158,11 @@ def oof_metrics(
     ):
         bin_poz = (stvarno >= lo) & (stvarno < hi) & poz
         if bin_poz.any():
-            m[f"oof_medape_{oznaka}"] = float(
+            metrike[f"oof_medape_{oznaka}"] = float(
                 np.median(abs_gres[bin_poz] / stvarno[bin_poz])
             )
 
-    return {k: v for k, v in m.items() if np.isfinite(v)}
+    return {k: v for k, v in metrike.items() if np.isfinite(v)}
 
 
 # Kolone za tabele poredjenja izmedju pristupa; podskup oof_metrics kljuceva
@@ -189,15 +194,13 @@ def metrike_runa(
 
 def rezime_linija(agg: dict, label: str) -> str:
     """Jednolinijski rezime runa za ispis na kraju notebooka."""
-    def _f(kljuc: str, fmt: str = ".2f") -> str:
-        return format(agg[kljuc], fmt) if kljuc in agg else "n/a"
-
     return (
         f"[{label}] CV R2 {agg['cv_mean_val_r2']:.3f} ± {agg['cv_std_val_r2']:.3f}"
         f" | OOF R2(log) {agg['oof_r2_log']:.3f}"
-        f" | medAPE {_f('oof_medape')} | wMAPE {_f('oof_wmape')}"
-        f" | bias {_f('oof_bias')}"
-        f" | opstina R2(log, bez top2) {_f('oof_opstina_r2_log_bez_top2', '.3f')}"
+        f" | medAPE {_fmt(agg, 'oof_medape', '.2f')}"
+        f" | wMAPE {_fmt(agg, 'oof_wmape', '.2f')}"
+        f" | bias {_fmt(agg, 'oof_bias', '.2f')}"
+        f" | opstina R2(log, bez top2) {_fmt(agg, 'oof_opstina_r2_log_bez_top2')}"
     )
 
 
@@ -239,19 +242,19 @@ def kalibracija_figure(
     x = np.arange(len(pristupi))
     sirina = 0.8 / len(serije)
 
-    for os_, kljuc, naslov, cilj in (
+    for panel, kljuc, naslov, cilj in (
         (ax[0], "oof_kalib_nagib", "Kalibracioni nagib (log-log)", 1.0),
         (ax[1], "oof_medape", "medAPE (medijalna procentualna greska)", None),
     ):
-        for i, s in enumerate(serije):
-            vred = [izmereno[(ime, s)].get(kljuc, np.nan) for ime in pristupi]
-            os_.bar(x + i * sirina - 0.4 + sirina / 2, vred, sirina, label=s)
+        for i, serija in enumerate(serije):
+            vrednosti = [izmereno[(ime, serija)].get(kljuc, np.nan) for ime in pristupi]
+            panel.bar(x + i * sirina - 0.4 + sirina / 2, vrednosti, sirina, label=serija)
         if cilj is not None:
-            os_.axhline(cilj, color="red", ls="--", lw=1, label="cilj = 1.0")
-        os_.set_xticks(x)
-        os_.set_xticklabels(pristupi, rotation=20, ha="right")
-        os_.set_title(naslov)
-        os_.legend(fontsize=9)
+            panel.axhline(cilj, color="red", ls="--", lw=1, label="cilj = 1.0")
+        panel.set_xticks(x)
+        panel.set_xticklabels(pristupi, rotation=20, ha="right")
+        panel.set_title(naslov)
+        panel.legend(fontsize=9)
 
     plt.tight_layout()
     return fig
@@ -306,28 +309,26 @@ def cv_summary_figure(
 
     # Tekstualni rezime: glavne metrike (log R2 + relativne, robusne na skew),
     # pa dijagnostika (nagib, bias) i opstina agregacija sa i bez top-2
-    def _f(kljuc: str, fmt: str = ".3f") -> str:
-        return format(agg[kljuc], fmt) if kljuc in agg else "n/a"
-
     ax[0, 1].axis("off")
     ax[0, 1].text(
         0.02, 0.5,
         f"CV R2 = {agg['cv_mean_val_r2']:.3f} \u00b1 {agg['cv_std_val_r2']:.3f}\n"
         f"OOF R2 (log-pop) = {agg['oof_r2_log']:.3f}\n"
-        f"medAPE = {_f('oof_medape', '.2f')} | wMAPE = {_f('oof_wmape', '.2f')}\n"
-        f"bias (sum pred/true) = {_f('oof_bias', '.2f')}\n"
-        f"kalib. nagib (log-log) = {_f('oof_kalib_nagib', '.2f')}\n"
-        f"medijana AE (st) = {_f('oof_mediana_ae', '.0f')}"
+        f"medAPE = {_fmt(agg, 'oof_medape', '.2f')}"
+        f" | wMAPE = {_fmt(agg, 'oof_wmape', '.2f')}\n"
+        f"bias (sum pred/true) = {_fmt(agg, 'oof_bias', '.2f')}\n"
+        f"kalib. nagib (log-log) = {_fmt(agg, 'oof_kalib_nagib', '.2f')}\n"
+        f"medijana AE (st) = {_fmt(agg, 'oof_mediana_ae', '.0f')}"
         f" | MAE (st) = {agg['oof_mae_stanovnici']:.0f}\n"
-        f"opstina R2 (log) = {_f('oof_opstina_r2_log')}\n"
-        f"opstina R2 (log, bez top2) = {_f('oof_opstina_r2_log_bez_top2')}",
+        f"opstina R2 (log) = {_fmt(agg, 'oof_opstina_r2_log')}\n"
+        f"opstina R2 (log, bez top2) = {_fmt(agg, 'oof_opstina_r2_log_bez_top2')}",
         fontsize=12, va="center",
     )
 
     # Scatter po naselju
-    m = max(float(stvarno.max()), float(oof_pred.max()), 1.0)
+    maks = max(float(stvarno.max()), float(oof_pred.max()), 1.0)
     ax[1, 0].scatter(stvarno, oof_pred, s=12, alpha=0.4)
-    ax[1, 0].plot([1, m], [1, m], "r--")
+    ax[1, 0].plot([1, maks], [1, maks], "r--")
     ax[1, 0].set_xscale("log")
     ax[1, 0].set_yscale("log")
     ax[1, 0].set_title("OOF naselje: stvarno vs predvidjeno")
