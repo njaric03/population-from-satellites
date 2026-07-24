@@ -1,10 +1,3 @@
-"""Finalna label tabela: naselje_maticni_broj -> populacija (RZS 2022).
-2-stepni join:
-  stage1: (opstina, naselje) normalizovano (strip paren + 'ГРАД ' prefiks)
-  stage2: za nematchovane -> po jedinstvenom imenu naselja (sa zadrzanom zagradom),
-          samo ako je ime jedinstveno na obe strane (bez laznih spojeva).
-Cilj ~99.9%. Izlaz: naselje_pop_final.csv
-"""
 import sys, re
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 import pandas as pd, openpyxl, pyogrio
@@ -55,7 +48,7 @@ g = g.merge(r1[["k_op", "k_na", "pop"]], on=["k_op", "k_na"], how="left")
 g["stage"] = g["pop"].notna().map({True: 1, False: 0})
 print("stage1 matched:", int(g["pop"].notna().sum()), "/", len(g))
 
-# ---- stage2: unique plain settlement name ----
+# ---- stage2: po imenu naselja, samo ako je jedinstveno na obe strane ----
 matched_keys = set(zip(g.loc[g["pop"].notna(), "k_op"], g.loc[g["pop"].notna(), "k_na"]))
 rzs_un = rzs[~rzs.apply(lambda x: (x.k_op, x.k_na) in matched_keys, axis=1)]
 rc = rzs_un.k_pl.value_counts(); uniq_rzs = set(rc[rc == 1].index)

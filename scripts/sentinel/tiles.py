@@ -1,8 +1,3 @@
-"""Pristup B1 - seckanje naselja na disjunktne 2.24km Sentinel plocice (iz kesiranih okrug-kompozita).
-Zadrzi plocice koje sadrze bar jednu zgradu naselja (prazne njive preskoci). Suma plocica = naselje.
-Izlaz: data/tiles/<mb>_<i>_<j>.npy (6,224,224) int16 + data/dataset/tiles_index.csv (path, naselje, pop).
-Bez novog Sentinel fetch-a (koristi okrug-kompozite).
-"""
 import os, glob
 import numpy as np, pandas as pd, geopandas as gpd, pyogrio, rasterio
 from rasterio.windows import from_bounds
@@ -11,7 +6,7 @@ from scripts import config
 
 COMP = config.OKRUG_COMP; OKR = config.OVERTURE_OKRUG
 OUT = config.TILES; config.obezbedi(OUT)
-PX, STEP = 224, 2240.0; H = STEP / 2
+PX, STEP = 224, 2240.0; H = STEP / 2   # disjunktne plocice 2.24 km, suma plocica = naselje
 
 have_comp = {int(os.path.basename(f).split("_")[1].split(".")[0]) for f in glob.glob(COMP + r"\okrug_*.tiff")}
 print("okruzi sa kompozitom:", sorted(have_comp))
@@ -45,6 +40,7 @@ for k in sorted(nas.okrug_sifra.unique()):
                 for j in range(j_lo, j_hi + 1):
                     tx, ty = cx + i * STEP, cy + j * STEP
                     if len(bc):
+                        # zadrzi samo plocice sa bar jednom zgradom (prazne njive preskoci)
                         inside = ((bc[:, 0] >= tx - H) & (bc[:, 0] < tx + H) &
                                   (bc[:, 1] >= ty - H) & (bc[:, 1] < ty + H)).any()
                         if not inside: continue

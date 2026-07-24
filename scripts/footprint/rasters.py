@@ -1,17 +1,3 @@
-"""Pristup 2b - rasterizacija otisaka zgrada (Overture) u kanale po naselju.
-Isti 224px @10m prozor oko centroida kao satelitski cutout (poravnato za fuziju).
-
-Kanali: [0] pokrivenost (udeo celije pod zgradom, 4x supersample),
-        [1] gustina zgrada (broj centroida po celiji).
-
-Oba su izvedena iskljucivo iz geometrije. Raniji kanal [1] je bio pokrivenost x
-spratnost, ali je num_floors popunjen u 0.76% zgrada a height u 0.05% (mereno
-nad svih 25 okruga, videti footprint/coverage.py), pa je spratnost bila 1
-za skoro sve zgrade i kanal [1] je ispadao duplikat kanala [0]. Broj centroida
-razdvaja mnogo malih zgrada od nekoliko velikih, sto pokrivenost sama ne vidi.
-
-Izlaz: data/footprint_cutouts/<mb>.npy (2,224,224) float32. Resumable.
-"""
 import os, glob
 import numpy as np, pandas as pd, geopandas as gpd
 from shapely.geometry import box
@@ -22,6 +8,7 @@ from scripts import config
 
 OKR = config.OVERTURE_OKRUG
 OUT = config.FOOTPRINT_CUT; config.obezbedi(OUT)
+# isti 224px @10m prozor oko centroida kao satelitski cutout (poravnato za fuziju)
 PX, H, SUB = 224, 1120, 4          # 224 px, pola strane 1120 m, 4x supersample (2.5 m)
 FPX, RES = PX * SUB, 10.0 / SUB
 

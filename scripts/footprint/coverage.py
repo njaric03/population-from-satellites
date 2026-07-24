@@ -1,7 +1,3 @@
-"""Provera pokrivenosti footprintima u SELIMA (Overture).
-Rizik: ML footprinti retki u selima -> izgradjenost nepouzdana ba za depopulacione slucajeve.
-Uzorak: 6 sela pop 50-800 + 2 depopulaciona (pop 1-20). Broj zgrada, krovna povrsina, izvori.
-"""
 import sys, os, subprocess
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 import pandas as pd, geopandas as gpd

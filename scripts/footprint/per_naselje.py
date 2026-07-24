@@ -1,28 +1,3 @@
-"""Pristup 2 - strukturirani atributi otisaka zgrada po naselju (Overture),
-petlja po okrugu (memorija niska).
-
-Po naselju se racuna 11 atributa u tri grupe, SVI iz geometrije:
-
-* kolicina  - broj zgrada, ukupna krovna povrsina
-* oblik     - prosecna, medijalna, p90 i rasipanje povrsine zgrade, kompaktnost
-              (4*pi*A/O^2), udeo zgrada preko 200 m2
-* raspored  - rastojanje do najblize zgrade i broj suseda u 50 m; razdvaja
-              zbijeno selo od rastrkanog sa istim brojem zgrada, sto sam broj
-              zgrada ne vidi
-
-Namerno se NE koriste Overture atributi (num_floors, height, subtype, class):
-mereno nad svih 25 kesiranih okruga (9.1M zapisa), num_floors je popunjen u
-0.76% zgrada, height u 0.05%, subtype/class u ~8.1%. Popunjenost je izrazito
-neravnomerna: okrug 0 ima 2.89% za num_floors i 24.35% za subtype, ostali red
-velicine manje. Zato bi model iz njih
-ucio gustinu mapiranja kao proksi za urbanost umesto stvarne izgradjenosti.
-Udeo zgrada preko 200 m2 hvata deo istog signala (stambeni blokovi su veliki)
-ali iz geometrije, sa punom pokrivenoscu. Videti footprint/coverage.py.
-
-Izlaz: data/dataset/naselje_footprints.parquet (+ .csv pregled), spojeno na
-naselje_table. Ulaz je treniracki notebook 03_footprint_train (tabelarni MLP)
-i tabelarna grana 04_multimodal_train.
-"""
 import sys, os, subprocess
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 import pandas as pd, geopandas as gpd, numpy as np, pyogrio
@@ -36,7 +11,7 @@ nas = gpd.read_file(config.NASELJA_GPKG)[
     ["naselje_maticni_broj", "opstina_maticni_broj", "geometry"]]
 ops = pyogrio.read_dataframe(config.OPSTINE_GPKG,
                              read_geometry=False)[["opstina_maticni_broj", "okrug_sifra"]]
-nas = nas.merge(ops, on="opstina_maticni_broj", how="left")     # 32634
+nas = nas.merge(ops, on="opstina_maticni_broj", how="left")
 
 parts = []
 okruzi = sorted(nas.okrug_sifra.dropna().unique().tolist())
@@ -89,7 +64,7 @@ for k in okruzi:
     except Exception as ex:
         print(f"okrug {int(k)}: ERR {str(ex)[:60]}")
 
-ATRIBUTI = config.FP_AGREGIRANI      # shema je u configu, jedini izvor istine
+ATRIBUTI = config.FP_AGREGIRANI      # spisak atributa i zasto bas ti: config.py
 
 fps = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(
     columns=["naselje_maticni_broj", *ATRIBUTI])

@@ -1,10 +1,3 @@
-"""
-GroupKFold CV podela, OOF metrike, rezime i grafici.
-
-Sve sto je zajednicko evaluaciji svih pristupa zivi ovde, pa su rezultati
-direktno uporedivi: ista podela po opstinama, isti skup metrika, isti grafik.
-Notebooci drze samo ono sto je specificno za svoj model.
-"""
 from __future__ import annotations
 
 import numpy as np
@@ -44,8 +37,7 @@ def napravi_foldove(
     for i, (t, v) in enumerate(folds):
         preklop = set(t[group_col]) & set(v[group_col])
         if preklop:
-            # raise a ne assert: ovo je glavna garancija protiv prostornog
-            # curenja i ne sme da nestane pod `python -O`
+            # raise, ne assert: provera protiv curenja mora uvek da radi
             raise ValueError(
                 f"curenje izmedju train i val u foldu {i}: "
                 f"{len(preklop)} zajednickih vrednosti '{group_col}'"

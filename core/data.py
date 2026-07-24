@@ -1,11 +1,3 @@
-"""
-Normalizacija po opsegu, Dataset i DataLoader pomocnici.
-
-Zajednicki za pristupe sa jednim .npy fajlom po naselju (Sentinel-2 cutout-i,
-footprint otisci). tiles_train koristi sopstveni NaseljaTiles dataset i
-napravi_loadere zbog collate_fn za agregacionu loss, ali moze koristiti
-stats_po_opsegu tako sto prosledi listu putanja plocica.
-"""
 from __future__ import annotations
 
 import os

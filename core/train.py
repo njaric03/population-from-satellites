@@ -1,15 +1,3 @@
-"""
-Seeding, standardni trening/evaluacioni prolaz i dvofazni trening (glava → fine-tuning).
-
-Napomene:
-
-* ``prodji`` radi za cutout i footprint pristupe (jedan (x, y) par po uzorku).
-  tiles_train ima sopstveni ``prodji`` sa scatter_add agregacionom loss-om koji
-  ne moze biti opsten - ostaviti ga lokalno u notebooku.
-* ``dvofazni_trening`` je identicno u svim trima notebucima: zamrznut backbone
-  (faza 1) pa fine-tuning sa CosineAnnealingLR (faza 2). tiles_train prosledjuje
-  sopstveni ``epoha`` closure koji interno koristi lokalni ``prodji``.
-"""
 from __future__ import annotations
 
 import random

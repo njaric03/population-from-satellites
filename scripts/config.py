@@ -1,27 +1,9 @@
-"""Putanje projekta na jednom mestu.
-
-Sve skripte u ``scripts/`` uvoze odavde (``from scripts import config``)
-umesto da svaka sklapa svoje putanje. Pokrecu se iz korena repoa kao moduli::
-
-    python -m scripts.preprocessing.build_labels
-
-Podela direktorijuma:
-
-* ``DATA``    - ulazi i medjukoraci; sve sto neki sledeci korak cita kao ulaz.
-                Van gita (preveliko), deli se kao zip preko Drive-a.
-* ``RESULTS`` - terminalne tabele i sazeci (.csv, .json); u gitu.
-* ``FIGURES`` - terminalne slike (.png); u gitu.
-
-Terminalno = niko dalje to ne konzumira kao ulaz, nego se gleda ili predaje.
-Tezine modela i OOF predikcije ne idu ni u jedno od ovoga - one nastaju u
-notebocima i idu u ``out/`` i uz MLflow run (videti ``core.environment``).
-"""
 import os
 
 KOREN   = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA    = os.path.join(KOREN, "data")
-RESULTS = os.path.join(KOREN, "results")
-FIGURES = os.path.join(KOREN, "figures")
+DATA    = os.path.join(KOREN, "data")       # ulazi i medjukoraci, van gita
+RESULTS = os.path.join(KOREN, "results")    # terminalne tabele i sazeci, u gitu
+FIGURES = os.path.join(KOREN, "figures")    # terminalne slike, u gitu
 
 
 def _p(*delovi: str) -> str:
@@ -60,9 +42,9 @@ def obezbedi(*putanje: str) -> None:
         os.makedirs(p, exist_ok=True)
 
 
-# --- shema strukturiranih atributa otisaka (pristup 2) ---------------------
-# Jedini izvor istine: footprint/per_naselje ih racuna, 03_footprint_train i
-# 04_multimodal_train ih citaju. Svi su izvedeni iz geometrije; Overture opisne
+# --- strukturirani atributi otisaka (pristup 2) ----------------------------
+# footprint/per_naselje ih racuna, 03_footprint_train i 04_multimodal_train ih
+# citaju. Svi su izvedeni iz geometrije; Overture opisne
 # kolone se ne koriste (num_floors 0.76%, height 0.05%, subtype/class ~8.1%,
 # i to neravnomerno po okruzima, pa mere gustinu mapiranja a ne izgradjenost).
 

@@ -1,9 +1,3 @@
-"""Faza 2.3 (batch) - Sentinel isečci preko openEO BATCH poslova po okrugu.
-Po okrugu: jedan medijan kompozit (6 opsega, 10m, 2024, oblaci<30) -> lokalno
-isecanje 224px prozora oko centroida svakog naselja. 25 poslova umesto 4720 poziva.
-Pokretanje: python -m scripts.sentinel.cutouts test   (1 najmanji okrug)  |  ... subset  |  ... full
-Resumable: preskace naselja iz index.csv i okruge sa postojecim kompozitom.
-"""
 import sys, os, time
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 import numpy as np, pandas as pd, geopandas as gpd, pyogrio, rasterio, openeo
@@ -16,7 +10,7 @@ os.makedirs(CUT, exist_ok=True); os.makedirs(COMP, exist_ok=True)
 IDX = config.CUTOUTS_INDEX
 BANDS = ["B02", "B03", "B04", "B08", "B11", "B12"]; PX = 224; H = 1120; PAD = 1300
 
-mode = sys.argv[1] if len(sys.argv) > 1 else "test"
+mode = sys.argv[1] if len(sys.argv) > 1 else "test"   # test = 1 najmanji okrug | subset = 5 okruga | full = svi
 nas = gpd.read_file(config.NASELJA_GPKG)[["naselje_maticni_broj", "opstina_maticni_broj", "geometry"]]
 ops = pyogrio.read_dataframe(config.OPSTINE_GPKG,
                              read_geometry=False)[["opstina_maticni_broj", "okrug_sifra"]]

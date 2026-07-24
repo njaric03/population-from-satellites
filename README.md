@@ -11,16 +11,16 @@ Dva komplementarna osnovna pristupa i dva načina fuzije:
 
 | # | Notebook | Ulaz | Ideja |
 |---|---|---|---|
-| 1 | `02_tiles_train.ipynb` | Sentinel-2 pločice 2.24 km | broj stanovnika po pločici (softplus), suma pločica = naselje, loss na sumi — naselja variraju od sela do grada, pa fiksan isečak po naselju ne radi (MAUP) |
+| 1 | `02_tiles_train.ipynb` | Sentinel-2 pločice 2.24 km | broj stanovnika po pločici (softplus), suma pločica = naselje, loss na sumi; naselja variraju od sela do grada, pa fiksan isečak po naselju ne radi (MAUP) |
 | 2 | `03_footprint_train.ipynb` | 14 strukturiranih atributa otisaka zgrada po naselju, svi iz geometrije (količina, oblik, raspored) | MLP na `log1p(pop)`; gradient boosting kao referentna linija |
-| 2b | `03_footprint_train.ipynb` | isti otisci, rasterizovani u 2 kanala (pokrivenost, gustina zgrada) | ResNet-18 regresija na `log1p(pop)` — da li prostorni raspored nosi nešto preko brojača? |
+| 2b | `03_footprint_train.ipynb` | isti otisci, rasterizovani u 2 kanala (pokrivenost, gustina zgrada) | ResNet-18 regresija na `log1p(pop)`: da li prostorni raspored nosi nešto preko brojača? |
 | F1 | `05_fusion_train.ipynb` | OOF predikcije pristupa 1/2/2b i F2 | stacking (Ridge u log prostoru) + post-hoc kalibracija po pristupu; bez GPU-a |
 | F2 | `04_multimodal_train.ipynb` | Sentinel isečak + footprint raster + 14 strukturiranih atributa istog naselja | jedan model koji istovremeno dobija strukturirane podatke i sliku: dva ResNet-18 trupa (512-dim svaki) + MLP grana (32-dim), konkatenacija u zajedničku glavu, end-to-end |
 
 Svi pristupi dele isti evaluacioni protokol (`core`): 5-struka GroupKFold
 podela po opštinama (bez prostornog curenja između trening i validacionog skupa),
 out-of-fold (OOF) predikcija za svako naselje tačno jednom, isti skup metrika i
-rezime grafik — rezultati su direktno uporedivi između pristupa.
+rezime grafik; rezultati su direktno uporedivi između pristupa.
 
 ## Metrike
 
@@ -41,7 +41,7 @@ na sebe). Detalji i obrazloženja u docstringu `core.cv.oof_metrics`.
 Kompresiju predikcija ka sredini ispravlja post-hoc kalibracija u
 `05_fusion_train`: za **svaki** pristup, pod istim foldovima, uči se monotona
 funkcija predviđeno → ispravljeno (Ridge nagib+presek u log-log, i isotonic).
-Monotona je pa ne menja redosled naselja — popravlja skalu, ne rangiranje.
+Monotona je pa ne menja redosled naselja, popravlja skalu, ne rangiranje.
 
 ## Struktura
 
@@ -59,7 +59,7 @@ notebooks/             Jupyter notebooci; prefiks = redosled pokretanja
   05_fusion_train.ipynb     fuzija F1 (stacking nad OOF predikcijama 02-04)
 scripts/               priprema podataka (lokalno; paket, pokrece se sa -m)
   config.py            sve putanje projekta na jednom mestu; uvoze ga ostale skripte
-  preprocessing/       labele i master tabela naselja — zajednicko svim pristupima
+  preprocessing/       labele i master tabela naselja, zajednicko svim pristupima
   sentinel/            satelitski ulazi: kompoziti, isecci (za F2), plocice (pristup 1)
   footprint/           otisci zgrada: strukturirani atributi (pristup 2),
                        rasterizacija (2b), coverage provera
@@ -73,7 +73,7 @@ requirements.txt       zavisnosti za lokalni rad
 (`oof_<pristup>.parquet`); 02-04 su medjusobno nezavisni.
 
 Izlazi runa (`out/`, `mlruns/`, `.pt` tezine, `oof_*.parquet`) se ne cuvaju u
-git-u — regenerisu se pokretanjem i ostaju uz MLflow run kao artefakti.
+git-u, regenerisu se pokretanjem i ostaju uz MLflow run kao artefakti.
 
 ## Izvori podataka
 
@@ -94,7 +94,7 @@ pip install -r requirements.txt
 ```
 
 Skripte su paket, pa se pokreću iz korena repoa sa `-m` (tako `from scripts
-import config` radi bez petljanja po `sys.path`). Redosled nije proizvoljan —
+import config` radi bez petljanja po `sys.path`). Redosled nije proizvoljan:
 svaki korak čita izlaz nekog ranijeg:
 
 ```
@@ -119,7 +119,7 @@ preprocessing.build_labels
                                    └─> sentinel.tiles
 ```
 
-`footprint.per_naselje` i `sentinel.cutouts` mogu paralelno — oba traže samo
+`footprint.per_naselje` i `sentinel.cutouts` mogu paralelno, oba traže samo
 `naselje_table.parquet`. `footprint.rasters` i `sentinel.tiles` oba traže i
 otiske iz Overture i Sentinel izlaz: rasterizacija zato što crta zgrade preko
 isečka, a pločice zato što centroidima zgrada odbacuju prazne.
@@ -130,7 +130,7 @@ Van pipeline-a, dijagnostika (traži samo `build_labels`, ne ulazi ni u šta):
 python -m scripts.footprint.coverage                # pokrivenost Overture otiscima u selima
 ```
 
-Uzorkuje 6 sela (pop 50–800) i 2 depopulaciona naselja (pop 1–20) i izveštava broj
+Uzorkuje 6 sela (pop 50-800) i 2 depopulaciona naselja (pop 1-20) i izveštava broj
 zgrada, krovnu površinu i izvore. Provera rizika za pristup 2: ako su ML-generisani
 otisci retki u selima, izgrađenost je nepouzdan signal baš tamo gde je populacija
 najmanja. Rezultat ide u `results/rural_footprints.csv`, odakle ga `01_eda` čita.
@@ -140,7 +140,7 @@ ih uvoze odatle umesto da svaka sklapa svoje):
 
 | | sadržaj | u gitu |
 |---|---|---|
-| `data/` | ulazi i međukoraci — sve što neki sledeći korak čita kao ulaz: geometrije, isečci, pločice, `naselje_table.parquet`, `naselje_pop_final.csv` | ne (preveliko) |
+| `data/` | ulazi i međukoraci: sve što neki sledeći korak čita kao ulaz: geometrije, isečci, pločice, `naselje_table.parquet`, `naselje_pop_final.csv` | ne (preveliko) |
 | `results/` | terminalne tabele i sažeci (`.csv`, `.json`) | da |
 | `figures/` | terminalne slike (`.png`) | da |
 | `out/`, MLflow | težine po foldu, OOF predikcije, rezime grafici runa | ne (regeneriše se) |
@@ -150,17 +150,17 @@ Terminalno = niko to dalje ne konzumira kao ulaz, nego se gleda ili predaje.
 ## Trening
 
 **Databricks** (primarno): repo je povezan kao Databricks Repo; podaci su
-preneti na UC Volume (`.../raw_data/data`). Otvoriti notebook i `Run all` —
+preneti na UC Volume (`.../raw_data/data`). Otvoriti notebook i `Run all`:
 putanje, MLflow tracking i izlazi se podese sami. Redosled za fuziju: prvo
 trenirački notebooki (1/2 i F2 `04_multimodal_train`, koji trenira iz sirovih
-ulaza — svaki snimi `oof_<pristup>.parquet`), pa `05_fusion_train`. `05_fusion_train`
+ulaza, svaki snimi `oof_<pristup>.parquet`), pa `05_fusion_train`. `05_fusion_train`
 uzima svaki OOF parquet koji zatekne, pa radi i sa podskupom pristupa.
 
 **Lokalno** (za razvoj i EDA): `pip install -r requirements.txt`, pa
 `jupyter lab`. Bez `/databricks` na disku `core.environment` sam prelazi na
 `out/` za težine i OOF, i na lokalni `mlruns/` za metrike. Ako su postavljeni
 `DATABRICKS_HOST` i `DATABRICKS_TOKEN`, metrike umesto toga idu u zajednički
-Databricks eksperiment. Trening celog skupa lokalno nema smisla bez GPU-a —
+Databricks eksperiment. Trening celog skupa lokalno nema smisla bez GPU-a:
 lokalno se pokreće `01_eda` i `05_fusion_train` (fuzija ne traži GPU).
 
 Svaki run se prati kroz MLflow: hiperparametri, metrike po epohi, OOF metrike,
