@@ -14,6 +14,7 @@ Dva komplementarna osnovna pristupa i dva načina fuzije:
 | 1 | `02_tiles_train.ipynb` | Sentinel-2 pločice 2.24 km | broj stanovnika po pločici (softplus), suma pločica = naselje, loss na sumi; naselja variraju od sela do grada, pa fiksan isečak po naselju ne radi (MAUP) |
 | 2 | `03_footprint_train.ipynb` | 14 strukturiranih atributa otisaka zgrada po naselju, svi iz geometrije (količina, oblik, raspored) | MLP na `log1p(pop)`; gradient boosting kao referentna linija |
 | 2b | `03_footprint_train.ipynb` | isti otisci, rasterizovani u 2 kanala (pokrivenost, gustina zgrada) | ResNet-18 regresija na `log1p(pop)`: da li prostorni raspored nosi nešto preko brojača? |
+| 2c | `03_footprint_train.ipynb` | isti atributi, isti foldovi | TabFM (tabelarni foundation model, Google, jun 2026): bez treninga po foldu, ceo fold ide u kontekst, predikcija u jednom forward prolazu; jednom sa `log1p` atributima, jednom sa sirovima |
 | F1 | `05_fusion_train.ipynb` | OOF predikcije pristupa 1/2/2b i F2 | stacking (Ridge u log prostoru) + post-hoc kalibracija po pristupu; bez GPU-a |
 | F2 | `04_multimodal_train.ipynb` | Sentinel isečak + footprint raster + 14 strukturiranih atributa istog naselja | jedan model koji istovremeno dobija strukturirane podatke i sliku: dva ResNet-18 trupa (512-dim svaki) + MLP grana (32-dim), konkatenacija u zajedničku glavu, end-to-end |
 
@@ -61,7 +62,7 @@ core/                  zajednicki modul (uvoze ga svi treniracki notebooci)
 notebooks/             Jupyter notebooci; prefiks = redosled pokretanja
   01_eda.ipynb              analiza podataka: jedinice, populacija, footprinti, snimci
   02_tiles_train.ipynb      pristup 1 (plocice + agregacioni loss, log vs linear)
-  03_footprint_train.ipynb  pristup 2 (tabelarni MLP + GBM referenca) i 2b (CNN nad rasterom)
+  03_footprint_train.ipynb  pristup 2 (tabelarni MLP + GBM referenca), 2b (CNN nad rasterom), 2c (TabFM)
   04_multimodal_train.ipynb fuzija F2 (zajednicki trogranski model: 2 slike + atributi)
   05_fusion_train.ipynb     fuzija F1 (stacking nad OOF predikcijama 02-04)
 scripts/               priprema podataka (lokalno; paket, pokrece se sa -m)
@@ -161,7 +162,13 @@ preneti na UC Volume (`.../raw_data/data`). Otvoriti notebook i `Run all`:
 putanje, MLflow tracking i izlazi se podese sami. Redosled za fuziju: prvo
 trenirački notebooki (1/2 i F2 `04_multimodal_train`, koji trenira iz sirovih
 ulaza, svaki snimi `oof_<pristup>.parquet`), pa `05_fusion_train`. `05_fusion_train`
-uzima svaki OOF parquet koji zatekne, pa radi i sa podskupom pristupa.
+uzima svaki OOF parquet koji zatekne, pa radi i sa podskupom pristupa. GBM i TabFM iz
+`03` ostaju van fuzije: nad istim su atributima kao tabelarni MLP, pa bi ulazi meta-modela
+bili gotovo kolinearni.
+
+TabFM skida težine sa Hugging Face-a (`google/tabfm-1.0.0-pytorch`) pri prvom učitavanju,
+bez naloga i tokena. Kod je Apache-2.0, težine su pod `tabfm-non-commercial-v1.0`, dakle
+samo za nekomercijalnu upotrebu. Traži Python >= 3.11.
 
 **Lokalno** (za razvoj i EDA): `pip install -r requirements.txt`, pa
 `jupyter lab`. Bez `/databricks` na disku `core.environment` sam prelazi na

@@ -18,6 +18,7 @@ pandas>=2.2
 pyarrow>=15.0            # pandas parquet engine (OOF predikcije)
 matplotlib>=3.8
 mlflow>=3.0              # mlflow.pytorch.log_model(name=...) postoji tek od 3.0
+tabfm[pytorch]>=1.0.1    # tabelarni foundation model, Google (pristup 2c); trazi Python >= 3.11
 
 # --- priprema podataka (scripts/) i EDA ---
 geopandas>=1.0
