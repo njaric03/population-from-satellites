@@ -9,6 +9,7 @@ VOLUME = Path("/Volumes/katalog/deep_learning/raw_data")
 
 KOREN = Path(__file__).resolve().parent.parent
 DATA = VOLUME / "data" if NA_DATABRICKSU else KOREN / "data"   # ulazi i medjukoraci
+NOTEBOOKS = KOREN / "notebooks"                                # izvrseni .ipynb, ulaz za report
 RESULTS = KOREN / "results"                                    # tabele i sazeci, u gitu
 FIGURES = KOREN / "figures"                                    # slike, u gitu
 
@@ -48,6 +49,7 @@ TILES = DATA / "tiles"                      # plocice 2.24 km (pristup 1)
 # --- terminalni izlazi (u gitu) -------------------------------------------
 RURAL_FOOTPRINTS = RESULTS / "rural_footprints.csv"            # footprint.coverage
 OVERTURE_POPUNJENOST = RESULTS / "overture_popunjenost_atributa.csv"
+METRIKE = RESULTS / "metrike_po_pristupu.csv"                  # scripts.report
 
 
 def ensure_dirs(*putanje: Path) -> None:

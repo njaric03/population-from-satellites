@@ -31,3 +31,4 @@ openeo>=0.30             # Sentinel-2 iseci preko Copernicus Data Space
 
 # --- notebooci ---
 jupyter>=1.0
+lxml>=5.0                # pandas.read_html: tabele metrika iz .ipynb izlaza (scripts/report)

@@ -1,0 +1,9 @@
+﻿pristup,n_naselja,oof_r2_log,oof_medape,oof_wmape,oof_bias,oof_kalib_nagib,oof_opstina_r2_log_bez_top2,izvor
+tiles_log,910,0.8105,0.4067,0.7775,0.2909,1.0754,-0.5335,05_fusion_train
+footprint_tab,910,0.9054,0.2527,0.4237,0.7115,1.0682,0.8009,05_fusion_train
+multimodal,910,0.8803,0.3485,0.5695,0.8722,1.0188,0.7837,05_fusion_train
+fuzija (stacking),910,0.9246,0.2421,0.3857,0.843,1.0032,0.861,05_fusion_train
+footprint_tab (MLP),4720,0.8752,0.2869,0.3387,0.86,0.9982,0.8364,03_footprint_train
+footprint_gbm (GBM),4720,0.8617,0.2928,0.3488,0.8684,0.9872,0.8639,03_footprint_train
+"footprint_tabfm (TabFM, log1p)",4720,0.8775,0.2621,0.2067,0.9367,0.9924,0.9194,03_footprint_train
+"footprint_tabfm (TabFM, sirovi)",4720,0.8769,0.2618,0.2159,0.9608,0.994,0.9169,03_footprint_train
