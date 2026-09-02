@@ -9,7 +9,8 @@ import pandas as pd
 # koren okruzenja stoji u scripts.config, da postoji tacno jedna definicija
 from scripts.config import NA_DATABRICKSU, VOLUME
 
-EXPERIMENT = "/Users/korisnik/procena_stanovnika"
+# MLflow eksperiment je putanja u radnom prostoru, pa zavisi od naloga
+EXPERIMENT = os.environ.get("POPULACIJA_MLFLOW_EXPERIMENT", "/Shared/procena_stanovnika")
 
 
 def output_dir() -> Path:

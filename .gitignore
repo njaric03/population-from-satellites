@@ -2,11 +2,6 @@
 data/
 *.zip
 
-# Claude Code i lokalna podešavanja
-.claude/
-CLAUDE.md
-.mcp.json
-
 # Python
 __pycache__/
 *.py[cod]

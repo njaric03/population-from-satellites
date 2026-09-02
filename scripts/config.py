@@ -4,8 +4,9 @@ from pathlib import Path
 # Databricks runtime uvek ima /databricks na disku
 NA_DATABRICKSU: bool = Path("/databricks").is_dir()
 
-# UC Volume drzi i podatke i izlaze treninga; core.environment uzima isti koren
-VOLUME = Path("/Volumes/katalog/deep_learning/raw_data")
+# UC Volume drzi i podatke i izlaze treninga; core.environment uzima isti koren.
+# Katalog i sema zavise od radnog prostora, pa se zadaju kroz okruzenje.
+VOLUME = Path(os.environ.get("POPULACIJA_VOLUME", "/Volumes/katalog/sema/raw_data"))
 
 KOREN = Path(__file__).resolve().parent.parent
 DATA = VOLUME / "data" if NA_DATABRICKSU else KOREN / "data"   # ulazi i medjukoraci
